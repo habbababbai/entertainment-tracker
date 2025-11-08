@@ -3,8 +3,9 @@
     "version": "0.0.1",
     "private": true,
     "type": "module",
-    "files": [
-        "base.json",
-        "node.json"
-    ]
+  "files": [
+    "base.json",
+    "node.json",
+    "react-native.json"
+  ]
 }

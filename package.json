@@ -19,13 +19,18 @@
         "be:db:seed": "pnpm --filter @entertainment-tracker/backend db:seed",
         "db:up": "docker compose up -d db || docker-compose up -d db",
         "db:down": "docker compose down || docker-compose down",
-        "db:reset": "(docker compose down -v || docker-compose down -v) && (docker compose up -d db || docker-compose up -d db)"
+        "db:reset": "(docker compose down -v || docker-compose down -v) && (docker compose up -d db || docker-compose up -d db)",
+        "mobile:dev": "pnpm --filter @entertainment-tracker/mobile dev",
+        "mobile:lint": "pnpm --filter @entertainment-tracker/mobile lint",
+        "mobile:typecheck": "pnpm --filter @entertainment-tracker/mobile typecheck",
+        "mobile:build": "pnpm --filter @entertainment-tracker/mobile build"
     },
     "keywords": [],
     "author": "",
     "license": "ISC",
     "packageManager": "pnpm@10.20.0",
     "devDependencies": {
+        "babel-plugin-module-resolver": "^5.0.2",
         "eslint": "^9.10.0",
         "turbo": "^2.0.11",
         "typescript": "^5.6.2"

@@ -1,0 +1,14 @@
+{
+    "$schema": "https://json.schemastore.org/tsconfig",
+    "extends": "./base.json",
+    "compilerOptions": {
+        "target": "ES2020",
+        "module": "esnext",
+        "moduleResolution": "node",
+        "jsx": "react-jsx",
+        "allowJs": false,
+        "types": ["react", "react-native"],
+        "skipLibCheck": true
+    }
+}
+
