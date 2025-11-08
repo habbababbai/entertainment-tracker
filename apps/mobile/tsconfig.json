@@ -1,21 +1,17 @@
 {
-  "extends": "@entertainment-tracker/tsconfig/react-native.json",
-  "compilerOptions": {
-    "baseUrl": ".",
-    "paths": {
-      "@/*": [
-        "./*"
-      ],
-      "~/*": [
-        "./*"
-      ]
-    }
-  },
-  "include": [
-    "app",
-    "App.tsx",
-    "assets",
-    ".expo/types/**/*.ts",
-    "expo-env.d.ts"
-  ]
+    "extends": "@entertainment-tracker/tsconfig/react-native.json",
+    "compilerOptions": {
+        "baseUrl": ".",
+        "paths": {
+            "@/*": ["./*"],
+            "~/*": ["./*"]
+        }
+    },
+    "include": [
+        "app",
+        "App.tsx",
+        "assets",
+        ".expo/types/**/*.ts",
+        "expo-env.d.ts"
+    ]
 }
