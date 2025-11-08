@@ -62,12 +62,12 @@ entertainment-tracker/
 
 ### Handy Database Commands
 
-- Start Postgres: `pnpm db:up`
-- Stop Postgres: `pnpm db:down`
-- Reset Postgres (drops volume): `pnpm db:reset`
-- Run Prisma migrations: `pnpm be:prisma:migrate`
-- Generate Prisma client: `pnpm be:prisma:generate`
-- Open Prisma Studio: `pnpm be:prisma:studio`
-- Seed database: `pnpm be:db:seed`
+-   Start Postgres: `pnpm db:up`
+-   Stop Postgres: `pnpm db:down`
+-   Reset Postgres (drops volume): `pnpm db:reset`
+-   Run Prisma migrations: `pnpm be:prisma:migrate`
+-   Generate Prisma client: `pnpm be:prisma:generate`
+-   Open Prisma Studio: `pnpm be:prisma:studio`
+-   Seed database: `pnpm be:db:seed`
 
 The backend currently exposes a Fastify instance with CORS/Helmet middleware and a versioned `GET /api/v1/health` endpoint. Future work will integrate PostgreSQL, domain modules, and shared API contracts for the mobile app.
