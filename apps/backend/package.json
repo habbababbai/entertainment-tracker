@@ -18,6 +18,7 @@
     "dependencies": {
         "@fastify/cors": "^11.1.0",
         "@fastify/helmet": "^13.0.2",
+        "@entertainment-tracker/contracts": "workspace:*",
         "@prisma/client": "^5.20.0",
         "dotenv": "^16.6.1",
         "fastify": "^5.6.1",

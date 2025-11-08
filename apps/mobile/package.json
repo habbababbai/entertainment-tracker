@@ -1,0 +1,41 @@
+{
+    "name": "@entertainment-tracker/mobile",
+    "private": true,
+    "version": "0.0.1",
+    "main": "expo-router/entry",
+    "scripts": {
+        "dev": "expo start --clear",
+        "start": "expo start",
+        "android": "expo start --android",
+        "ios": "expo start --ios",
+        "web": "expo start --web",
+        "build": "expo export --platform web",
+        "lint": "eslint \"**/*.{ts,tsx}\"",
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "@entertainment-tracker/contracts": "workspace:*",
+        "@tanstack/react-query": "^5.59.0",
+        "expo": "~54.0.23",
+        "expo-router": "~6.0.14",
+        "expo-status-bar": "~3.0.8",
+        "react": "19.1.0",
+        "react-native": "0.81.5",
+        "react-native-safe-area-context": "5.6.2"
+    },
+    "devDependencies": {
+        "@entertainment-tracker/eslint-config": "workspace:*",
+        "@entertainment-tracker/tsconfig": "workspace:*",
+        "@types/react": "~19.1.0",
+        "@types/react-native": "~0.73.0",
+        "@typescript-eslint/eslint-plugin": "^8.11.0",
+        "@typescript-eslint/parser": "^8.11.0",
+        "eslint": "^9.10.0",
+        "typescript": "~5.9.2"
+    },
+    "overrides": {
+        "expo-router": {
+            "type": "commonjs"
+        }
+    }
+}

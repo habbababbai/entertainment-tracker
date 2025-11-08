@@ -1,4 +1,9 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
+import type { MediaItem as PrismaMediaItem } from "@prisma/client";
+import {
+    mediaListSchema,
+    type MediaItem
+} from "@entertainment-tracker/contracts";
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
@@ -55,15 +60,35 @@ export const mediaRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
         async (request) => {
             const { limit = DEFAULT_LIMIT } = request.query as { limit?: number };
 
-            const items = await app.prisma.mediaItem.findMany({
+            const records = await app.prisma.mediaItem.findMany({
                 take: Math.min(limit, MAX_LIMIT),
                 orderBy: {
                     createdAt: "desc",
                 },
             });
 
-            return { items };
+            const items = records.map(serializeMediaItem);
+
+            return mediaListSchema.parse({ items });
         },
     );
 };
+
+function serializeMediaItem(item: PrismaMediaItem): MediaItem {
+    return {
+        id: item.id,
+        externalId: item.externalId,
+        source: item.source,
+        title: item.title,
+        description: item.description ?? null,
+        posterUrl: item.posterUrl ?? null,
+        backdropUrl: item.backdropUrl ?? null,
+        mediaType: item.mediaType,
+        totalSeasons: item.totalSeasons ?? null,
+        totalEpisodes: item.totalEpisodes ?? null,
+        releaseDate: item.releaseDate ? item.releaseDate.toISOString() : null,
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString()
+    };
+}
 
