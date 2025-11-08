@@ -32,3 +32,24 @@ entertainment-tracker/
 -   Maintain per-user watchlists across movies, TV series, and anime
 -   Track completion state, episode progress, and personal ratings
 -   Sync data between the Expo app and backend API
+
+## Backend (Fastify) Setup
+
+1. Install dependencies from the repo root:
+    ```bash
+    pnpm install
+    ```
+2. Copy environment template and adjust values as needed:
+    ```bash
+    cp apps/backend/env.example apps/backend/.env
+    ```
+3. Start the backend dev server:
+    ```bash
+    pnpm be:dev
+    ```
+4. Verify the health check:
+    ```bash
+    curl http://localhost:3000/api/v1/health
+    ```
+
+The backend currently exposes a Fastify instance with CORS/Helmet middleware and a versioned `GET /api/v1/health` endpoint. Future work will integrate PostgreSQL, domain modules, and shared API contracts for the mobile app.
