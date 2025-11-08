@@ -1,0 +1,13 @@
+{
+  "name": "@entertainment-tracker/eslint-config",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "peerDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.11.0",
+    "@typescript-eslint/parser": "^8.11.0",
+    "eslint": "^9.10.0"
+  }
+}
+

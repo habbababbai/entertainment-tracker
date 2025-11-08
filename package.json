@@ -10,7 +10,16 @@
         "test": "echo \"No root tests defined\" && exit 0",
         "be:dev": "pnpm --filter @entertainment-tracker/backend dev",
         "be:build": "pnpm --filter @entertainment-tracker/backend build",
-        "be:lint": "pnpm --filter @entertainment-tracker/backend lint"
+        "be:lint": "pnpm --filter @entertainment-tracker/backend lint",
+        "be:typecheck": "pnpm --filter @entertainment-tracker/backend typecheck",
+        "be:prisma:generate": "pnpm --filter @entertainment-tracker/backend prisma:generate",
+        "be:prisma:migrate": "pnpm --filter @entertainment-tracker/backend prisma:migrate",
+        "be:prisma:deploy": "pnpm --filter @entertainment-tracker/backend prisma:deploy",
+        "be:prisma:studio": "pnpm --filter @entertainment-tracker/backend prisma:studio",
+        "be:db:seed": "pnpm --filter @entertainment-tracker/backend db:seed",
+        "db:up": "docker compose up -d db || docker-compose up -d db",
+        "db:down": "docker compose down || docker-compose down",
+        "db:reset": "(docker compose down -v || docker-compose down -v) && (docker compose up -d db || docker-compose up -d db)"
     },
     "keywords": [],
     "author": "",
