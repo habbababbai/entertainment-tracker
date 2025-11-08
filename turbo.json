@@ -14,7 +14,15 @@
       ]
     },
     "lint": {
+      "dependsOn": [
+        "^lint"
+      ],
       "outputs": []
+    },
+    "typecheck": {
+      "dependsOn": [
+        "^typecheck"
+      ]
     }
   }
 }

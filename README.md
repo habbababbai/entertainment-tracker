@@ -70,4 +70,10 @@ entertainment-tracker/
 -   Open Prisma Studio: `pnpm be:prisma:studio`
 -   Seed database: `pnpm be:db:seed`
 
-The backend currently exposes a Fastify instance with CORS/Helmet middleware and a versioned `GET /api/v1/health` endpoint. Future work will integrate PostgreSQL, domain modules, and shared API contracts for the mobile app.
+### Backend Workflows
+
+-   Lint backend sources: `pnpm be:lint`
+-   Type-check backend code: `pnpm be:typecheck`
+-   Build backend bundle: `pnpm be:build`
+
+The backend currently exposes a Fastify instance with CORS/Helmet middleware, Prisma integration, and versioned APIs. Future work will expand domain modules and shared API contracts for the mobile app.
