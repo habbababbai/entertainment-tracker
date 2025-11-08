@@ -12,7 +12,7 @@ const prisma = new PrismaClient();
 export const prismaPlugin = fp(async (app) => {
     app.decorate("prisma", prisma);
 
-    app.addHook("onClose", async () => {
-        await app.prisma.$disconnect();
+    app.addHook("onClose", async (instance) => {
+        await instance.prisma.$disconnect();
     });
 });
