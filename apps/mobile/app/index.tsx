@@ -1,28 +1,44 @@
-import { useCallback } from "react";
 import {
     ActivityIndicator,
     FlatList,
     RefreshControl,
     StyleSheet,
     Text,
+    TextInput,
+    TouchableOpacity,
     View,
 } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useCallback, useState } from "react";
 import { fetchMedia, MediaItem } from "../lib/media";
 
 export default function HomeScreen() {
-    const { data, isLoading, isRefetching, isError, refetch, error } = useQuery(
-        {
-            queryKey: ["media", { limit: 20 }],
-            queryFn: () => fetchMedia(20),
-            staleTime: 1000 * 60,
-        }
-    );
+    const [search, setSearch] = useState("chainsaw man");
+    const [submittedSearch, setSubmittedSearch] = useState("chainsaw man");
+
+    const { data, isLoading, isRefetching, isError, refetch, error } = useQuery<
+        MediaItem[],
+        Error
+    >({
+        queryKey: ["media", { query: submittedSearch, limit: 20 }],
+        queryFn: () => fetchMedia({ query: submittedSearch, limit: 20 }),
+        staleTime: 1000 * 60,
+        enabled: submittedSearch.trim().length > 0,
+    });
 
     const handleRefresh = useCallback(() => {
         void refetch();
     }, [refetch]);
+
+    const handleSubmit = useCallback(() => {
+        const trimmed = search.trim();
+        if (!trimmed) {
+            return;
+        }
+
+        setSubmittedSearch(trimmed);
+    }, [search]);
 
     return (
         <SafeAreaView style={styles.container}>
@@ -31,7 +47,32 @@ export default function HomeScreen() {
                 Browse your watchlist powered by Expo Router & TanStack Query.
             </Text>
 
-            {isLoading ? (
+            <View style={styles.searchBar}>
+                <TextInput
+                    value={search}
+                    onChangeText={setSearch}
+                    placeholder="Search OMDb (e.g. Spirited Away)"
+                    returnKeyType="search"
+                    onSubmitEditing={handleSubmit}
+                    style={styles.searchInput}
+                    autoCapitalize="none"
+                />
+                <TouchableOpacity
+                    onPress={handleSubmit}
+                    style={styles.searchButton}
+                    activeOpacity={0.8}
+                >
+                    <Text style={styles.searchButtonText}>Search</Text>
+                </TouchableOpacity>
+            </View>
+
+            {submittedSearch.trim().length === 0 ? (
+                <View style={styles.centerContent}>
+                    <Text style={styles.statusText}>
+                        Start typing to search OMDb titles.
+                    </Text>
+                </View>
+            ) : isLoading ? (
                 <View style={styles.centerContent}>
                     <ActivityIndicator size="large" />
                     <Text style={styles.statusText}>Loading media…</Text>
@@ -73,6 +114,9 @@ export default function HomeScreen() {
 }
 
 function MediaCard({ item }: { item: MediaItem }) {
+    const releaseLabel = formatDate(item.releaseDate);
+    const updatedLabel = formatDate(item.updatedAt);
+
     return (
         <View style={styles.card}>
             <View style={styles.cardHeader}>
@@ -89,11 +133,24 @@ function MediaCard({ item }: { item: MediaItem }) {
                 </Text>
             )}
             <Text style={styles.cardMeta}>
-                Source: {item.source} • Updated{" "}
-                {new Date(item.updatedAt).toLocaleDateString()}
+                Source: {item.source} • Released: {releaseLabel} • Updated:{" "}
+                {updatedLabel}
             </Text>
         </View>
     );
+}
+
+function formatDate(value?: string | null): string {
+    if (!value) {
+        return "N/A";
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return "N/A";
+    }
+
+    return date.toLocaleDateString();
 }
 
 const styles = StyleSheet.create({
@@ -136,6 +193,32 @@ const styles = StyleSheet.create({
     hint: {
         marginTop: 8,
         color: "#4b5563",
+    },
+    searchBar: {
+        flexDirection: "row",
+        gap: 12,
+        alignItems: "center",
+        marginBottom: 16,
+    },
+    searchInput: {
+        flex: 1,
+        borderWidth: 1,
+        borderColor: "#d1d5db",
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        fontSize: 16,
+        backgroundColor: "#f8fafc",
+    },
+    searchButton: {
+        backgroundColor: "#2563eb",
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 10,
+    },
+    searchButtonText: {
+        color: "#fff",
+        fontWeight: "600",
     },
     listContent: {
         paddingBottom: 24,
