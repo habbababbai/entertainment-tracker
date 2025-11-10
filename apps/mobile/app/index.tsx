@@ -1,28 +1,84 @@
-import { useCallback } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
     ActivityIndicator,
     FlatList,
     RefreshControl,
     StyleSheet,
     Text,
+    TextInput,
+    TouchableOpacity,
     View,
 } from "react-native";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { fetchMedia, MediaItem } from "../lib/media";
+
+import { fetchMedia, type MediaItem, type MediaList } from "../lib/media";
+
+const PAGE_SIZE = 15;
 
 export default function HomeScreen() {
-    const { data, isLoading, isRefetching, isError, refetch, error } = useQuery(
-        {
-            queryKey: ["media", { limit: 20 }],
-            queryFn: () => fetchMedia(20),
-            staleTime: 1000 * 60,
-        }
+    const [search, setSearch] = useState("chainsaw man");
+    const [submittedSearch, setSubmittedSearch] = useState("chainsaw man");
+
+    const {
+        data,
+        isLoading,
+        isError,
+        error,
+        refetch,
+        isRefetching,
+        fetchNextPage,
+        hasNextPage,
+        isFetchingNextPage,
+    } = useInfiniteQuery<MediaList, Error>({
+        queryKey: ["media", submittedSearch],
+        initialPageParam: 1,
+        queryFn: ({ pageParam }) =>
+            fetchMedia({
+                query: submittedSearch,
+                limit: PAGE_SIZE,
+                page:
+                    typeof pageParam === "number"
+                        ? pageParam
+                        : Number(pageParam ?? 1) || 1,
+            }),
+        getNextPageParam: (lastPage) =>
+            lastPage.hasMore ? lastPage.nextPage ?? undefined : undefined,
+        staleTime: 1000 * 60,
+        enabled: submittedSearch.trim().length > 0,
+    });
+
+    const items = useMemo(
+        () => data?.pages.flatMap((page) => page.items) ?? [],
+        [data]
     );
 
+    const handleSubmit = useCallback(() => {
+        const trimmed = search.trim();
+        if (!trimmed) {
+            return;
+        }
+
+        setSubmittedSearch(trimmed);
+    }, [search]);
+
     const handleRefresh = useCallback(() => {
+        if (submittedSearch.trim().length === 0) {
+            return;
+        }
         void refetch();
-    }, [refetch]);
+    }, [refetch, submittedSearch]);
+
+    const handleEndReached = useCallback(() => {
+        if (hasNextPage && !isFetchingNextPage) {
+            void fetchNextPage();
+        }
+    }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+    const isRefreshing = isRefetching && !isFetchingNextPage;
+    const trimmedSubmitted = submittedSearch.trim();
+    const showEmptyState =
+        !isLoading && !isFetchingNextPage && items.length === 0;
 
     return (
         <SafeAreaView style={styles.container}>
@@ -31,7 +87,32 @@ export default function HomeScreen() {
                 Browse your watchlist powered by Expo Router & TanStack Query.
             </Text>
 
-            {isLoading ? (
+            <View style={styles.searchBar}>
+                <TextInput
+                    value={search}
+                    onChangeText={setSearch}
+                    placeholder="Search OMDb (e.g. Spirited Away)"
+                    returnKeyType="search"
+                    onSubmitEditing={handleSubmit}
+                    style={styles.searchInput}
+                    autoCapitalize="none"
+                />
+                <TouchableOpacity
+                    onPress={handleSubmit}
+                    style={styles.searchButton}
+                    activeOpacity={0.8}
+                >
+                    <Text style={styles.searchButtonText}>Search</Text>
+                </TouchableOpacity>
+            </View>
+
+            {trimmedSubmitted.length === 0 ? (
+                <View style={styles.centerContent}>
+                    <Text style={styles.statusText}>
+                        Start typing to search OMDb titles.
+                    </Text>
+                </View>
+            ) : isLoading ? (
                 <View style={styles.centerContent}>
                     <ActivityIndicator size="large" />
                     <Text style={styles.statusText}>Loading media…</Text>
@@ -39,19 +120,18 @@ export default function HomeScreen() {
             ) : isError ? (
                 <View style={styles.centerContent}>
                     <Text style={styles.errorText}>Unable to load media.</Text>
-                    <Text style={styles.errorDetails}>
-                        {(error as Error).message}
-                    </Text>
+                    <Text style={styles.errorDetails}>{error.message}</Text>
                     <Text style={styles.hint}>Pull to retry.</Text>
                 </View>
             ) : (
                 <FlatList
-                    data={data ?? []}
+                    data={items}
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.listContent}
+                    keyboardShouldPersistTaps="handled"
                     refreshControl={
                         <RefreshControl
-                            refreshing={isRefetching}
+                            refreshing={isRefreshing}
                             onRefresh={handleRefresh}
                         />
                     }
@@ -59,13 +139,24 @@ export default function HomeScreen() {
                         <View style={styles.separator} />
                     )}
                     renderItem={({ item }) => <MediaCard item={item} />}
-                    ListEmptyComponent={() => (
-                        <View style={styles.centerContent}>
-                            <Text style={styles.statusText}>
-                                No media found.
-                            </Text>
-                        </View>
-                    )}
+                    ListEmptyComponent={
+                        showEmptyState ? (
+                            <View style={styles.centerContent}>
+                                <Text style={styles.statusText}>
+                                    No media found.
+                                </Text>
+                            </View>
+                        ) : null
+                    }
+                    ListFooterComponent={
+                        isFetchingNextPage ? (
+                            <View style={styles.footer}>
+                                <ActivityIndicator />
+                            </View>
+                        ) : null
+                    }
+                    onEndReached={handleEndReached}
+                    onEndReachedThreshold={0.5}
                 />
             )}
         </SafeAreaView>
@@ -73,6 +164,9 @@ export default function HomeScreen() {
 }
 
 function MediaCard({ item }: { item: MediaItem }) {
+    const releaseLabel = formatDate(item.releaseDate);
+    const updatedLabel = formatDate(item.updatedAt);
+
     return (
         <View style={styles.card}>
             <View style={styles.cardHeader}>
@@ -89,11 +183,24 @@ function MediaCard({ item }: { item: MediaItem }) {
                 </Text>
             )}
             <Text style={styles.cardMeta}>
-                Source: {item.source} • Updated{" "}
-                {new Date(item.updatedAt).toLocaleDateString()}
+                Source: {item.source} • Released: {releaseLabel} • Updated:{" "}
+                {updatedLabel}
             </Text>
         </View>
     );
+}
+
+function formatDate(value?: string | null): string {
+    if (!value) {
+        return "N/A";
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return "N/A";
+    }
+
+    return date.toLocaleDateString();
 }
 
 const styles = StyleSheet.create({
@@ -136,6 +243,32 @@ const styles = StyleSheet.create({
     hint: {
         marginTop: 8,
         color: "#4b5563",
+    },
+    searchBar: {
+        flexDirection: "row",
+        gap: 12,
+        alignItems: "center",
+        marginBottom: 16,
+    },
+    searchInput: {
+        flex: 1,
+        borderWidth: 1,
+        borderColor: "#d1d5db",
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        fontSize: 16,
+        backgroundColor: "#f8fafc",
+    },
+    searchButton: {
+        backgroundColor: "#2563eb",
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 10,
+    },
+    searchButtonText: {
+        color: "#fff",
+        fontWeight: "600",
     },
     listContent: {
         paddingBottom: 24,
@@ -186,5 +319,10 @@ const styles = StyleSheet.create({
     cardMeta: {
         fontSize: 12,
         color: "#6b7280",
+    },
+    footer: {
+        paddingVertical: 16,
+        alignItems: "center",
+        justifyContent: "center",
     },
 });
