@@ -22,6 +22,8 @@ export type MediaItem = z.infer<typeof mediaItemSchema>;
 
 export const mediaListSchema = z.object({
     items: z.array(mediaItemSchema),
+    hasMore: z.boolean(),
+    nextPage: z.number().int().min(1).nullable().optional(),
 });
 
 export type MediaList = z.infer<typeof mediaListSchema>;

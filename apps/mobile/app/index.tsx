@@ -1,3 +1,4 @@
+import { useCallback, useMemo, useState } from "react";
 import {
     ActivityIndicator,
     FlatList,
@@ -8,28 +9,49 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useCallback, useState } from "react";
-import { fetchMedia, MediaItem } from "../lib/media";
+
+import { fetchMedia, type MediaItem, type MediaList } from "../lib/media";
+
+const PAGE_SIZE = 15;
 
 export default function HomeScreen() {
     const [search, setSearch] = useState("chainsaw man");
     const [submittedSearch, setSubmittedSearch] = useState("chainsaw man");
 
-    const { data, isLoading, isRefetching, isError, refetch, error } = useQuery<
-        MediaItem[],
-        Error
-    >({
-        queryKey: ["media", { query: submittedSearch, limit: 20 }],
-        queryFn: () => fetchMedia({ query: submittedSearch, limit: 20 }),
+    const {
+        data,
+        isLoading,
+        isError,
+        error,
+        refetch,
+        isRefetching,
+        fetchNextPage,
+        hasNextPage,
+        isFetchingNextPage,
+    } = useInfiniteQuery<MediaList, Error>({
+        queryKey: ["media", submittedSearch],
+        initialPageParam: 1,
+        queryFn: ({ pageParam }) =>
+            fetchMedia({
+                query: submittedSearch,
+                limit: PAGE_SIZE,
+                page:
+                    typeof pageParam === "number"
+                        ? pageParam
+                        : Number(pageParam ?? 1) || 1,
+            }),
+        getNextPageParam: (lastPage) =>
+            lastPage.hasMore ? lastPage.nextPage ?? undefined : undefined,
         staleTime: 1000 * 60,
         enabled: submittedSearch.trim().length > 0,
     });
 
-    const handleRefresh = useCallback(() => {
-        void refetch();
-    }, [refetch]);
+    const items = useMemo(
+        () => data?.pages.flatMap((page) => page.items) ?? [],
+        [data]
+    );
 
     const handleSubmit = useCallback(() => {
         const trimmed = search.trim();
@@ -39,6 +61,24 @@ export default function HomeScreen() {
 
         setSubmittedSearch(trimmed);
     }, [search]);
+
+    const handleRefresh = useCallback(() => {
+        if (submittedSearch.trim().length === 0) {
+            return;
+        }
+        void refetch();
+    }, [refetch, submittedSearch]);
+
+    const handleEndReached = useCallback(() => {
+        if (hasNextPage && !isFetchingNextPage) {
+            void fetchNextPage();
+        }
+    }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+    const isRefreshing = isRefetching && !isFetchingNextPage;
+    const trimmedSubmitted = submittedSearch.trim();
+    const showEmptyState =
+        !isLoading && !isFetchingNextPage && items.length === 0;
 
     return (
         <SafeAreaView style={styles.container}>
@@ -66,7 +106,7 @@ export default function HomeScreen() {
                 </TouchableOpacity>
             </View>
 
-            {submittedSearch.trim().length === 0 ? (
+            {trimmedSubmitted.length === 0 ? (
                 <View style={styles.centerContent}>
                     <Text style={styles.statusText}>
                         Start typing to search OMDb titles.
@@ -80,19 +120,18 @@ export default function HomeScreen() {
             ) : isError ? (
                 <View style={styles.centerContent}>
                     <Text style={styles.errorText}>Unable to load media.</Text>
-                    <Text style={styles.errorDetails}>
-                        {(error as Error).message}
-                    </Text>
+                    <Text style={styles.errorDetails}>{error.message}</Text>
                     <Text style={styles.hint}>Pull to retry.</Text>
                 </View>
             ) : (
                 <FlatList
-                    data={data ?? []}
+                    data={items}
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.listContent}
+                    keyboardShouldPersistTaps="handled"
                     refreshControl={
                         <RefreshControl
-                            refreshing={isRefetching}
+                            refreshing={isRefreshing}
                             onRefresh={handleRefresh}
                         />
                     }
@@ -100,13 +139,24 @@ export default function HomeScreen() {
                         <View style={styles.separator} />
                     )}
                     renderItem={({ item }) => <MediaCard item={item} />}
-                    ListEmptyComponent={() => (
-                        <View style={styles.centerContent}>
-                            <Text style={styles.statusText}>
-                                No media found.
-                            </Text>
-                        </View>
-                    )}
+                    ListEmptyComponent={
+                        showEmptyState ? (
+                            <View style={styles.centerContent}>
+                                <Text style={styles.statusText}>
+                                    No media found.
+                                </Text>
+                            </View>
+                        ) : null
+                    }
+                    ListFooterComponent={
+                        isFetchingNextPage ? (
+                            <View style={styles.footer}>
+                                <ActivityIndicator />
+                            </View>
+                        ) : null
+                    }
+                    onEndReached={handleEndReached}
+                    onEndReachedThreshold={0.5}
                 />
             )}
         </SafeAreaView>
@@ -269,5 +319,10 @@ const styles = StyleSheet.create({
     cardMeta: {
         fontSize: 12,
         color: "#6b7280",
+    },
+    footer: {
+        paddingVertical: 16,
+        alignItems: "center",
+        justifyContent: "center",
     },
 });

@@ -1,23 +1,26 @@
 import {
     mediaListSchema,
     type MediaItem,
+    type MediaList,
 } from "@entertainment-tracker/contracts";
 import Constants from "expo-constants";
 import { NativeModules } from "react-native";
 
-export type { MediaItem } from "@entertainment-tracker/contracts";
+export type { MediaItem, MediaList } from "@entertainment-tracker/contracts";
 
 const API_BASE_URL = resolveApiBaseUrl();
 
 export interface FetchMediaOptions {
     query: string;
     limit?: number;
+    page?: number;
 }
 
 export async function fetchMedia({
     query,
-    limit = 20,
-}: FetchMediaOptions): Promise<MediaItem[]> {
+    limit = 15,
+    page = 1,
+}: FetchMediaOptions): Promise<MediaList> {
     const trimmedQuery = query.trim();
 
     if (!trimmedQuery) {
@@ -27,6 +30,7 @@ export async function fetchMedia({
     const url = new URL("/api/v1/media", API_BASE_URL);
     url.searchParams.set("query", trimmedQuery);
     url.searchParams.set("limit", String(limit));
+    url.searchParams.set("page", String(page));
 
     const response = await fetch(url.toString());
 
@@ -37,14 +41,7 @@ export async function fetchMedia({
         );
     }
 
-    const data = mediaListSchema.parse(await response.json());
-    const unique = new Map<string, MediaItem>();
-    for (const item of data.items) {
-        if (!unique.has(item.id)) {
-            unique.set(item.id, item);
-        }
-    }
-    return Array.from(unique.values());
+    return mediaListSchema.parse(await response.json());
 }
 
 function resolveApiBaseUrl(): string {

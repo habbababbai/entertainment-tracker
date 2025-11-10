@@ -2,15 +2,17 @@ import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import {
     mediaListSchema,
     type MediaItem,
+    type MediaList,
     mediaTypeSchema,
 } from "@entertainment-tracker/contracts";
 
 import { env } from "../../env.js";
 
-const DEFAULT_LIMIT = 20;
-const MAX_LIMIT = 20;
+const DEFAULT_LIMIT = 15;
+const MAX_LIMIT = 15;
 const OMDB_BASE_URL = "https://www.omdbapi.com/";
 const OMDB_PAGE_SIZE = 10;
+const MAX_OMDB_PAGES = 100;
 
 interface OmdbSearchItem {
     Title: string;
@@ -57,6 +59,11 @@ export const mediaRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
                             maximum: MAX_LIMIT,
                             default: DEFAULT_LIMIT,
                         },
+                        page: {
+                            type: "integer",
+                            minimum: 1,
+                            default: 1,
+                        },
                     },
                     required: ["query"],
                     additionalProperties: false,
@@ -94,8 +101,12 @@ export const mediaRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
                                         releaseDate: {
                                             type: ["string", "null"],
                                         },
-                                        createdAt: { type: ["string", "null"] },
-                                        updatedAt: { type: ["string", "null"] },
+                                        createdAt: {
+                                            type: ["string", "null"],
+                                        },
+                                        updatedAt: {
+                                            type: ["string", "null"],
+                                        },
                                     },
                                     required: [
                                         "id",
@@ -106,8 +117,15 @@ export const mediaRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
                                     ],
                                 },
                             },
+                            hasMore: { type: "boolean" },
+                            nextPage: {
+                                anyOf: [
+                                    { type: "integer", minimum: 1 },
+                                    { type: "null" },
+                                ],
+                            },
                         },
-                        required: ["items"],
+                        required: ["items", "hasMore"],
                     },
                 },
             },
@@ -116,15 +134,25 @@ export const mediaRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
             const { limit = DEFAULT_LIMIT, query } = request.query as {
                 limit?: number;
                 query: string;
+                page?: number;
             };
 
-            const items = await fetchOmdbMedia(
+            const page =
+                typeof (request.query as { page?: number }).page === "number"
+                    ? Math.max(
+                          1,
+                          Math.floor((request.query as { page?: number }).page!)
+                      )
+                    : 1;
+
+            const result = await fetchOmdbMedia(
                 app,
                 query,
-                Math.min(limit, MAX_LIMIT)
+                Math.min(limit, MAX_LIMIT),
+                page
             );
 
-            return mediaListSchema.parse({ items });
+            return mediaListSchema.parse(result);
         }
     );
 };
@@ -132,25 +160,47 @@ export const mediaRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
 async function fetchOmdbMedia(
     app: FastifyInstance,
     query: string,
-    limit: number
-): Promise<MediaItem[]> {
+    limit: number,
+    page: number
+): Promise<MediaList> {
     const trimmedQuery = query.trim();
     if (!trimmedQuery) {
-        return [];
+        return {
+            items: [],
+            hasMore: false,
+            nextPage: null,
+        };
     }
 
-    const pagesNeeded = Math.max(1, Math.ceil(limit / OMDB_PAGE_SIZE));
-    const collected: OmdbSearchItem[] = [];
+    const offset = (page - 1) * limit;
+    const startOmdbPage = Math.floor(offset / OMDB_PAGE_SIZE) + 1;
+    const skipWithinFirstPage = offset % OMDB_PAGE_SIZE;
 
-    for (let page = 1; page <= pagesNeeded; page++) {
+    const collected: OmdbSearchItem[] = [];
+    const seenIds = new Set<string>();
+
+    let totalResults: number | undefined;
+    let reachedEnd = false;
+    let currentOmdbPage = startOmdbPage;
+    let isFirstPage = true;
+
+    while (
+        collected.length < limit &&
+        !reachedEnd &&
+        currentOmdbPage <= MAX_OMDB_PAGES
+    ) {
         const searchResponse = await requestOmdb<OmdbSearchResponse>(app, {
             s: trimmedQuery,
-            page: String(page),
+            page: String(currentOmdbPage),
         });
 
         if (searchResponse.Response === "False") {
             if (searchResponse.Error === "Movie not found!") {
-                return [];
+                return {
+                    items: [],
+                    hasMore: false,
+                    nextPage: null,
+                };
             }
 
             throw new Error(
@@ -158,43 +208,95 @@ async function fetchOmdbMedia(
             );
         }
 
-        if (searchResponse.Search) {
-            collected.push(...searchResponse.Search);
+        if (totalResults === undefined && searchResponse.totalResults) {
+            const parsedTotal = Number.parseInt(
+                searchResponse.totalResults,
+                10
+            );
+            if (!Number.isNaN(parsedTotal)) {
+                totalResults = parsedTotal;
+            }
         }
 
         if (
-            !searchResponse.Search ||
-            searchResponse.Search.length < OMDB_PAGE_SIZE
+            isFirstPage &&
+            totalResults !== undefined &&
+            offset >= totalResults
         ) {
-            break;
+            return {
+                items: [],
+                hasMore: false,
+                nextPage: null,
+            };
         }
 
-        if (collected.length >= limit) {
-            break;
-        }
-    }
+        const searchItems = searchResponse.Search ?? [];
 
-    const limited = collected.slice(0, limit);
-    const detailed = await Promise.all(
-        limited.map(async (item) => {
-            const detail = await requestOmdb<OmdbDetailResponse>(app, {
-                i: item.imdbID,
-                plot: "short",
-            });
+        const startIndex = isFirstPage ? skipWithinFirstPage : 0;
+        isFirstPage = false;
 
-            if (detail.Response === "False") {
-                app.log.warn(
-                    { imdbID: item.imdbID, error: detail.Error },
-                    "Failed to fetch OMDb details"
-                );
-                return mapSearchFallback(item);
+        for (let i = startIndex; i < searchItems.length; i++) {
+            const candidate = searchItems[i];
+            if (seenIds.has(candidate.imdbID)) {
+                continue;
             }
 
-            return mapOmdbDetail(detail);
-        })
+            seenIds.add(candidate.imdbID);
+            collected.push(candidate);
+
+            if (collected.length >= limit) {
+                break;
+            }
+        }
+
+        if (searchItems.length < OMDB_PAGE_SIZE) {
+            reachedEnd = true;
+        }
+
+        if (
+            totalResults !== undefined &&
+            offset + collected.length >= totalResults
+        ) {
+            reachedEnd = true;
+        }
+
+        currentOmdbPage += 1;
+    }
+
+    const detailPromises = collected.map(async (item) => {
+        const detail = await requestOmdb<OmdbDetailResponse>(app, {
+            i: item.imdbID,
+            plot: "short",
+        });
+
+        if (detail.Response === "False") {
+            app.log.warn(
+                { imdbID: item.imdbID, error: detail.Error },
+                "Failed to fetch OMDb details"
+            );
+            return mapSearchFallback(item);
+        }
+
+        return mapOmdbDetail(detail);
+    });
+
+    const detailed = (await Promise.all(detailPromises)).filter(
+        (item): item is MediaItem => Boolean(item)
     );
 
-    return detailed.filter(Boolean) as MediaItem[];
+    const totalCollected = offset + collected.length;
+    const hasMore =
+        totalResults !== undefined
+            ? totalCollected < totalResults
+            : collected.length === limit && !reachedEnd;
+
+    const nextPage = hasMore ? page + 1 : null;
+
+    return {
+        items: detailed,
+        hasMore,
+        nextPage,
+    };
 }
 
 async function requestOmdb<T>(
