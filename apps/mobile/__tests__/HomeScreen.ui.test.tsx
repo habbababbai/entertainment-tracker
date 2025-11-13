@@ -10,7 +10,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { notifyManager } from "@tanstack/query-core";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import HomeScreen from "../app/index";
+import HomeScreen from "../app/(tabs)/home";
 import type { MediaItem, MediaList } from "../lib/media";
 import { fetchMedia } from "../lib/media";
 
