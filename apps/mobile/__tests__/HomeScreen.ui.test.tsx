@@ -48,7 +48,7 @@ function createQueryClient() {
     });
 }
 
-function renderHomeScreen() {
+function renderHomeScreen(options?: Parameters<typeof HomeScreen>[0]) {
     const queryClient = createQueryClient();
     activeClients.add(queryClient);
     const utils = render(
@@ -59,7 +59,7 @@ function renderHomeScreen() {
             }}
         >
             <QueryClientProvider client={queryClient}>
-                <HomeScreen />
+                <HomeScreen {...options} />
             </QueryClientProvider>
         </SafeAreaProvider>
     );
@@ -114,6 +114,15 @@ afterEach(async () => {
 });
 
 describe("HomeScreen UI", () => {
+    it("shows a prompt when no search has been submitted", async () => {
+        const { findByText } = renderHomeScreen({ initialQuery: "" });
+
+        expect(
+            await findByText("Start typing to search OMDb titles.")
+        ).toBeTruthy();
+        expect(fetchMediaMock).not.toHaveBeenCalled();
+    });
+
     it("renders media results with fallback copy when fields are missing", async () => {
         fetchMediaMock.mockResolvedValueOnce(
             createMediaList([

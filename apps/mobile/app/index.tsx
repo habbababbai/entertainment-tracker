@@ -21,9 +21,15 @@ import { fontSizes, fontWeights } from "../lib/theme/fonts";
 
 const PAGE_SIZE = 15;
 
-export default function HomeScreen() {
-    const [search, setSearch] = useState("chainsaw man");
-    const [submittedSearch, setSubmittedSearch] = useState("chainsaw man");
+type HomeScreenProps = {
+    initialQuery?: string;
+};
+
+export default function HomeScreen({
+    initialQuery = "chainsaw man",
+}: HomeScreenProps = {}) {
+    const [search, setSearch] = useState(initialQuery);
+    const [submittedSearch, setSubmittedSearch] = useState(initialQuery);
     const { t } = useTranslation();
 
     const {
