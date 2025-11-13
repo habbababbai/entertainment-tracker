@@ -42,6 +42,60 @@ describe("mediaRoutes", () => {
         globalThis.fetch = originalFetch;
     });
 
+    it("returns media item details for a known id", async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => omdbDetailMovieResponse,
+        });
+
+        const response = await app.inject({
+            method: "GET",
+            url: "/media/tt0000001",
+        });
+
+        expect(response.statusCode).toBe(200);
+        const payload = response.json() as Record<string, unknown>;
+
+        expect(payload).toMatchObject({
+            id: "tt0000001",
+            externalId: "tt0000001",
+            title: "Sample Movie",
+            mediaType: "MOVIE",
+        });
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        const firstCallUrl = new URL(fetchMock.mock.calls[0][0] as string);
+        expect(firstCallUrl.searchParams.get("i")).toBe("tt0000001");
+        expect(firstCallUrl.searchParams.get("plot")).toBe("short");
+    });
+
+    it("returns 404 when OMDb reports the media id is missing", async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                Response: "False",
+                Error: "Movie not found!",
+            }),
+        });
+
+        const response = await app.inject({
+            method: "GET",
+            url: "/media/unknown-id",
+        });
+
+        expect(response.statusCode).toBe(404);
+        const payload = response.json() as Record<string, unknown>;
+
+        expect(payload).toMatchObject({
+            statusCode: 404,
+            error: "Not Found",
+            message: "Media item not found",
+        });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        const firstCallUrl = new URL(fetchMock.mock.calls[0][0] as string);
+        expect(firstCallUrl.searchParams.get("i")).toBe("unknown-id");
+    });
+
     it("returns mapped media items when OMDb responds with results", async () => {
         fetchMock.mockResolvedValueOnce({
             ok: true,
