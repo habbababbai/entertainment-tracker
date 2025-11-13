@@ -7,6 +7,7 @@ import {
     waitFor,
 } from "@testing-library/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { notifyManager } from "@tanstack/query-core";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import HomeScreen from "../app/index";
@@ -23,6 +24,18 @@ jest.mock("../lib/media", () => {
 
 const fetchMediaMock = fetchMedia as jest.MockedFunction<typeof fetchMedia>;
 const activeClients = new Set<QueryClient>();
+
+const originalScheduler = notifyManager.schedule;
+
+beforeAll(() => {
+    notifyManager.setScheduler((callback) => {
+        callback();
+    });
+});
+
+afterAll(() => {
+    notifyManager.setScheduler(originalScheduler);
+});
 
 function createQueryClient() {
     return new QueryClient({
