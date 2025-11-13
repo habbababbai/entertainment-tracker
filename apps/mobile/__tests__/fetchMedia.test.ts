@@ -1,3 +1,4 @@
+import { extractHostSegment, resolveApiBaseUrl } from "../lib/media";
 import type { MediaList } from "../lib/media";
 
 jest.mock("expo-constants", () => ({
@@ -125,5 +126,31 @@ describe("fetchMedia", () => {
             "Search query cannot be empty."
         );
         expect(fetchMock).not.toHaveBeenCalled();
+    });
+});
+
+describe("extractHostSegment", () => {
+    it("returns host when value includes port", () => {
+        expect(extractHostSegment("192.168.0.5:8081")).toBe("192.168.0.5");
+    });
+
+    it("returns null when host is missing", () => {
+        expect(extractHostSegment(":8081")).toBeNull();
+        expect(extractHostSegment(undefined)).toBeNull();
+        expect(extractHostSegment(null)).toBeNull();
+    });
+});
+
+describe("resolveApiBaseUrl", () => {
+    it("prefers Expo host URI when provided", () => {
+        const url = resolveApiBaseUrl(
+            {
+                expoGoConfig: { hostUri: "192.168.100.5:8081" },
+            },
+            {},
+            {}
+        );
+
+        expect(url).toBe("http://192.168.100.5:3000");
     });
 });
