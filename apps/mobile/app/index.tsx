@@ -108,7 +108,12 @@ export default function HomeScreen({
                         {t("home.errorHeading")}
                     </Text>
                     {error?.message ? (
-                        <Text style={styles.errorDetails}>{error.message}</Text>
+                        <Text
+                            style={styles.errorDetails}
+                            testID="media-error-details"
+                        >
+                            {error.message}
+                        </Text>
                     ) : null}
                     <Text style={styles.hint}>{t("common.pullToRetry")}</Text>
                 </View>
@@ -196,7 +201,7 @@ export default function HomeScreen({
                 ListEmptyComponent={listEmptyComponent}
                 ListFooterComponent={
                     isFetchingNextPage && !isError ? (
-                        <View style={styles.footer}>
+                        <View style={styles.footer} testID="media-list-footer">
                             <ActivityIndicator />
                         </View>
                     ) : null

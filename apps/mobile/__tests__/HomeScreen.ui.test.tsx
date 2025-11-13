@@ -187,11 +187,23 @@ describe("HomeScreen UI", () => {
     it("shows an error message when the query fails", async () => {
         fetchMediaMock.mockRejectedValueOnce(new Error("Network unavailable"));
 
-        const { findByText } = renderHomeScreen();
+    const { findByText, getByTestId } = renderHomeScreen();
 
         expect(await findByText("Unable to load media.")).toBeTruthy();
         expect(await findByText("Network unavailable")).toBeTruthy();
+    expect(getByTestId("media-error-details").props.children).toBe(
+        "Network unavailable"
+    );
     });
+
+it("omits error details when the query fails without a message", async () => {
+    fetchMediaMock.mockRejectedValueOnce(new Error(""));
+
+    const { findByText, queryByTestId } = renderHomeScreen();
+
+    expect(await findByText("Unable to load media.")).toBeTruthy();
+    expect(queryByTestId("media-error-details")).toBeNull();
+});
 
     it("submits a trimmed search term when the button is pressed", async () => {
         fetchMediaMock
@@ -265,6 +277,48 @@ describe("HomeScreen UI", () => {
         expect(secondCall?.[0]?.page).toBe(2);
     });
 
+it("shows a footer spinner while fetching the next page", async () => {
+    let resolveSecond: (value: MediaList) => void;
+    const secondPromise = new Promise<MediaList>((resolve) => {
+        resolveSecond = resolve;
+    });
+
+    fetchMediaMock
+        .mockResolvedValueOnce({
+            ...createMediaList([
+                createMediaItem({ id: "media-701", title: "Mob Psycho" }),
+            ]),
+            hasMore: true,
+            nextPage: 2,
+        })
+        .mockImplementationOnce(() => secondPromise);
+
+    const { getByTestId, findByText, queryByTestId } = renderHomeScreen();
+
+    await findByText("Mob Psycho");
+
+    const list = getByTestId("media-list");
+    await act(async () => {
+        fireEvent(list, "onEndReached");
+    });
+
+    await waitFor(() =>
+        expect(getByTestId("media-list-footer")).toBeTruthy()
+    );
+
+    act(() =>
+        resolveSecond!(
+            createMediaList([
+                createMediaItem({ id: "media-702", title: "Mob Psycho Finale" }),
+            ])
+        )
+    );
+
+    await waitFor(() =>
+        expect(queryByTestId("media-list-footer")).toBeNull()
+    );
+});
+
     it("refetches results when the list is pulled to refresh", async () => {
         fetchMediaMock
             .mockResolvedValueOnce(
@@ -317,4 +371,11 @@ describe("HomeScreen UI", () => {
 
         await waitFor(() => expect(fetchMediaMock).not.toHaveBeenCalled());
     });
+});
+
+it("disables pull-to-refresh when no search has been submitted", async () => {
+    const { getByTestId } = renderHomeScreen({ initialQuery: "" });
+
+    const list = getByTestId("media-list");
+    expect(list.props.refreshControl.props.enabled).toBe(false);
 });
