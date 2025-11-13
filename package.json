@@ -28,6 +28,7 @@
         "mobile:typecheck": "pnpm --filter @entertainment-tracker/mobile typecheck",
         "mobile:build": "pnpm --filter @entertainment-tracker/mobile build",
         "mobile:test": "pnpm --filter @entertainment-tracker/mobile test",
+        "mobile:test:coverage": "pnpm --filter @entertainment-tracker/mobile test:coverage",
         "mobile:test:watch": "pnpm --filter @entertainment-tracker/mobile test --watchAll=false --watch"
     },
     "keywords": [],

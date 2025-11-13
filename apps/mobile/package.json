@@ -12,7 +12,8 @@
         "build": "expo export --platform web",
         "lint": "eslint \"**/*.{ts,tsx}\"",
         "typecheck": "tsc --noEmit",
-        "test": "jest"
+        "test": "jest",
+        "test:coverage": "jest --coverage"
     },
     "dependencies": {
         "@entertainment-tracker/contracts": "workspace:*",
