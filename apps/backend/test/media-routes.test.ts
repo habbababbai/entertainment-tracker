@@ -96,6 +96,56 @@ describe("mediaRoutes", () => {
         expect(firstCallUrl.searchParams.get("i")).toBe("unknown-id");
     });
 
+    it("returns 404 without calling OMDb when id is only whitespace", async () => {
+        const response = await app.inject({
+            method: "GET",
+            url: "/media/%20%20%20",
+        });
+
+        expect(response.statusCode).toBe(404);
+        expect(fetchMock).not.toHaveBeenCalled();
+        const payload = response.json() as Record<string, unknown>;
+        expect(payload).toMatchObject({
+            statusCode: 404,
+            error: "Not Found",
+            message: "Media item not found",
+        });
+    });
+
+    it("returns 500 when OMDb detail lookup fails with a non-not-found error", async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                Response: "False",
+                Error: "Internal error",
+            }),
+        });
+
+        const response = await app.inject({
+            method: "GET",
+            url: "/media/ttError",
+        });
+
+        expect(response.statusCode).toBe(500);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns 500 when OMDb request responds with non-OK status", async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: false,
+            status: 503,
+            text: async () => "Service unavailable",
+        });
+
+        const response = await app.inject({
+            method: "GET",
+            url: "/media/ttServiceDown",
+        });
+
+        expect(response.statusCode).toBe(500);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
     it("returns mapped media items when OMDb responds with results", async () => {
         fetchMock.mockResolvedValueOnce({
             ok: true,
@@ -245,6 +295,59 @@ describe("mediaRoutes", () => {
             posterUrl: null,
             mediaType: "MOVIE",
             releaseDate: "1999-01-01T00:00:00.000Z",
+        });
+
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("maps missing detail fields to nulls when OMDb data is unavailable", async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                Response: "True",
+                Search: [
+                    {
+                        Title: "Mystery Entry",
+                        imdbID: "ttMissingFields",
+                        Type: "movie",
+                    },
+                ],
+                totalResults: "1",
+            }),
+        });
+
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                Response: "True",
+                Title: "Mystery Entry",
+                imdbID: "ttMissingFields",
+                Plot: "N/A",
+                Poster: "N/A",
+                Released: "not-a-date",
+                Year: "N/A",
+            }),
+        });
+
+        const response = await app.inject({
+            method: "GET",
+            url: "/media",
+            query: {
+                query: "mystery",
+            },
+        });
+
+        expect(response.statusCode).toBe(200);
+        const payload = response.json() as {
+            items: Array<Record<string, unknown>>;
+        };
+
+        expect(payload.items).toHaveLength(1);
+        expect(payload.items[0]).toMatchObject({
+            id: "ttMissingFields",
+            description: null,
+            posterUrl: null,
+            releaseDate: null,
         });
 
         expect(fetchMock).toHaveBeenCalledTimes(2);
