@@ -81,6 +81,12 @@ entertainment-tracker/
 
 Backend tests use Vitest with globally stubbed environment variables defined in `apps/backend/test/setup.ts`. Shared OMDb payload fixtures live under `apps/backend/test/fixtures` to keep scenarios consistent across suites.
 
+### Shared Contracts
+
+-   Build TypeScript/Zod contracts: `pnpm --filter @entertainment-tracker/contracts build`
+
+Contracts power the runtime validation used by both the backend and the mobile app. Rebuild them after changing anything under `packages/contracts/src` so that the generated `dist` artifacts stay in sync.
+
 ### Mobile Workflows
 
 -   Run Expo dev server: `pnpm mobile:dev`
