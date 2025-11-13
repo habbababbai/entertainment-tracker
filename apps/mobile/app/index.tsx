@@ -55,18 +55,15 @@ export default function HomeScreen() {
 
     const handleSubmit = useCallback(() => {
         const trimmed = search.trim();
-        if (!trimmed) {
-            return;
+        if (trimmed) {
+            setSubmittedSearch(trimmed);
         }
-
-        setSubmittedSearch(trimmed);
     }, [search]);
 
     const handleRefresh = useCallback(() => {
-        if (submittedSearch.trim().length === 0) {
-            return;
+        if (submittedSearch.trim().length > 0) {
+            void refetch();
         }
-        void refetch();
     }, [refetch, submittedSearch]);
 
     const handleEndReached = useCallback(() => {
@@ -125,6 +122,7 @@ export default function HomeScreen() {
                 </View>
             ) : (
                 <FlatList
+                    testID="media-list"
                     data={items}
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.listContent}
