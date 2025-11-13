@@ -4,6 +4,7 @@ import fastifyHelmet from "@fastify/helmet";
 
 import { registerRoutes } from "./routes/index.js";
 import { prismaPlugin } from "./plugins/prisma.js";
+import { authPlugin } from "./plugins/auth.js";
 
 type BuildAppOptions = FastifyServerOptions;
 
@@ -23,6 +24,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     });
 
     app.register(prismaPlugin);
+    app.register(authPlugin);
 
     registerRoutes(app);
 
