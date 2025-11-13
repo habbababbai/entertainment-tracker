@@ -9,9 +9,30 @@ const {
     ...basePreset
 } = expoPreset;
 
-const projects = presetProjects.map(({ watchPlugins, ...projectConfig }) => ({
-    ...projectConfig,
-}));
+const projects = presetProjects.map(({ watchPlugins, ...projectConfig }) => {
+    const displayName =
+        typeof projectConfig.displayName === "string"
+            ? projectConfig.displayName
+            : projectConfig.displayName?.name;
+    const normalized = displayName
+        ? displayName.toString().toLowerCase()
+        : undefined;
+
+    const testPathIgnorePatterns = [
+        ...(projectConfig.testPathIgnorePatterns ?? []),
+    ];
+
+    if (normalized === "web" || normalized === "node") {
+        testPathIgnorePatterns.push(
+            "<rootDir>/__tests__/.*\\.ui\\.test\\.[jt]sx?$"
+        );
+    }
+
+    return {
+        ...projectConfig,
+        testPathIgnorePatterns,
+    };
+});
 
 module.exports = {
     ...basePreset,
