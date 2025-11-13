@@ -12,5 +12,3 @@ export const colors = {
 };
 
 export type ColorToken = keyof typeof colors;
-
-
