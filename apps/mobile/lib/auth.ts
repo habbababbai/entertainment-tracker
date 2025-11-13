@@ -46,11 +46,12 @@ async function postJson<T>(
     try {
         return parser(payload);
     } catch (error) {
-        if (error instanceof Error) {
-            throw new Error(`Malformed auth response: ${error.message}`);
-        }
+        const detailSource =
+            (error as { message?: unknown } | null | undefined)?.message ??
+            error ??
+            "Unknown parser error";
 
-        throw new Error("Malformed auth response.");
+        throw new Error(`Malformed auth response: ${String(detailSource)}`);
     }
 }
 
@@ -127,3 +128,7 @@ function expectString(value: unknown, label: string): string {
 
     return value;
 }
+
+export const __testUtils = {
+    postJsonForTests: postJson,
+};
