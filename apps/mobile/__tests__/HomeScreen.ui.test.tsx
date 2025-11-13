@@ -30,7 +30,6 @@ function createQueryClient() {
             queries: {
                 retry: false,
                 gcTime: 0,
-                cacheTime: 0,
             },
         },
     });

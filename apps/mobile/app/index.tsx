@@ -11,14 +11,20 @@ import {
 } from "react-native";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
+import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
 import { fetchMedia, type MediaItem, type MediaList } from "../lib/media";
+import "../lib/i18n";
+import { colors } from "../lib/theme/colors";
+import { fontSizes, fontWeights } from "../lib/theme/fonts";
 
 const PAGE_SIZE = 15;
 
 export default function HomeScreen() {
     const [search, setSearch] = useState("chainsaw man");
     const [submittedSearch, setSubmittedSearch] = useState("chainsaw man");
+    const { t } = useTranslation();
 
     const {
         data,
@@ -79,16 +85,14 @@ export default function HomeScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <Text style={styles.title}>Entertainment Tracker</Text>
-            <Text style={styles.subtitle}>
-                Browse your watchlist powered by Expo Router & TanStack Query.
-            </Text>
+            <Text style={styles.title}>{t("home.title")}</Text>
+            <Text style={styles.subtitle}>{t("home.subtitle")}</Text>
 
             <View style={styles.searchBar}>
                 <TextInput
                     value={search}
                     onChangeText={setSearch}
-                    placeholder="Search OMDb (e.g. Spirited Away)"
+                    placeholder={t("home.searchPlaceholder")}
                     returnKeyType="search"
                     onSubmitEditing={handleSubmit}
                     style={styles.searchInput}
@@ -99,26 +103,30 @@ export default function HomeScreen() {
                     style={styles.searchButton}
                     activeOpacity={0.8}
                 >
-                    <Text style={styles.searchButtonText}>Search</Text>
+                    <Text style={styles.searchButtonText}>
+                        {t("home.searchAction")}
+                    </Text>
                 </TouchableOpacity>
             </View>
 
             {trimmedSubmitted.length === 0 ? (
                 <View style={styles.centerContent}>
                     <Text style={styles.statusText}>
-                        Start typing to search OMDb titles.
+                        {t("home.startTyping")}
                     </Text>
                 </View>
             ) : isLoading ? (
                 <View style={styles.centerContent}>
                     <ActivityIndicator size="large" />
-                    <Text style={styles.statusText}>Loading media…</Text>
+                    <Text style={styles.statusText}>{t("home.loading")}</Text>
                 </View>
             ) : isError ? (
                 <View style={styles.centerContent}>
-                    <Text style={styles.errorText}>Unable to load media.</Text>
+                    <Text style={styles.errorText}>
+                        {t("home.errorHeading")}
+                    </Text>
                     <Text style={styles.errorDetails}>{error.message}</Text>
-                    <Text style={styles.hint}>Pull to retry.</Text>
+                    <Text style={styles.hint}>{t("common.pullToRetry")}</Text>
                 </View>
             ) : (
                 <FlatList
@@ -141,7 +149,7 @@ export default function HomeScreen() {
                         showEmptyState ? (
                             <View style={styles.centerContent}>
                                 <Text style={styles.statusText}>
-                                    No media found.
+                                    {t("home.emptyList")}
                                 </Text>
                             </View>
                         ) : null
@@ -162,8 +170,10 @@ export default function HomeScreen() {
 }
 
 function MediaCard({ item }: { item: MediaItem }) {
-    const releaseLabel = formatDate(item.releaseDate);
-    const updatedLabel = formatDate(item.updatedAt);
+    const { t } = useTranslation();
+    const fallbackLabel = t("common.notAvailable");
+    const releaseLabel = formatDate(item.releaseDate, fallbackLabel);
+    const updatedLabel = formatDate(item.updatedAt, fallbackLabel);
 
     return (
         <View style={styles.card}>
@@ -177,25 +187,31 @@ function MediaCard({ item }: { item: MediaItem }) {
                 </Text>
             ) : (
                 <Text style={styles.cardDescriptionMuted}>
-                    No description provided.
+                    {t("home.emptyDescription")}
                 </Text>
             )}
             <Text style={styles.cardMeta}>
-                Source: {item.source} • Released: {releaseLabel} • Updated:{" "}
-                {updatedLabel}
+                {t("home.mediaMeta", {
+                    source: item.source,
+                    release: releaseLabel,
+                    updated: updatedLabel,
+                })}
             </Text>
         </View>
     );
 }
 
-function formatDate(value?: string | null): string {
+function formatDate(
+    value: string | null | undefined,
+    fallback: string
+): string {
     if (!value) {
-        return "N/A";
+        return fallback;
     }
 
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) {
-        return "N/A";
+        return fallback;
     }
 
     return date.toLocaleDateString();
@@ -204,80 +220,88 @@ function formatDate(value?: string | null): string {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        padding: 24,
-        backgroundColor: "#fff",
+        paddingHorizontal: scale(24),
+        paddingVertical: verticalScale(24),
+        backgroundColor: colors.background,
     },
     title: {
-        fontSize: 24,
-        fontWeight: "600",
+        fontSize: fontSizes.xl,
+        fontWeight: fontWeights.semiBold,
         textAlign: "center",
+        color: colors.textPrimary,
     },
     subtitle: {
         textAlign: "center",
-        marginTop: 8,
-        marginBottom: 16,
-        color: "#374151",
+        marginTop: verticalScale(8),
+        marginBottom: verticalScale(16),
+        color: colors.textSecondary,
+        fontSize: fontSizes.md,
     },
     centerContent: {
         flex: 1,
         alignItems: "center",
         justifyContent: "center",
-        gap: 8,
+        gap: verticalScale(8),
     },
     statusText: {
-        color: "#4b5563",
+        color: colors.textSecondary,
         textAlign: "center",
+        fontSize: fontSizes.sm,
     },
     errorText: {
-        fontSize: 18,
-        fontWeight: "600",
-        color: "#dc2626",
+        fontSize: fontSizes.lg,
+        fontWeight: fontWeights.semiBold,
+        color: colors.error,
         textAlign: "center",
     },
     errorDetails: {
         textAlign: "center",
-        color: "#b91c1c",
+        color: colors.errorMuted,
+        fontSize: fontSizes.sm,
     },
     hint: {
-        marginTop: 8,
-        color: "#4b5563",
+        marginTop: verticalScale(8),
+        color: colors.textSecondary,
+        fontSize: fontSizes.sm,
     },
     searchBar: {
         flexDirection: "row",
-        gap: 12,
+        gap: scale(12),
         alignItems: "center",
-        marginBottom: 16,
+        marginBottom: verticalScale(16),
     },
     searchInput: {
         flex: 1,
         borderWidth: 1,
-        borderColor: "#d1d5db",
-        borderRadius: 10,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        fontSize: 16,
-        backgroundColor: "#f8fafc",
+        borderColor: colors.border,
+        borderRadius: moderateScale(10),
+        paddingHorizontal: scale(12),
+        paddingVertical: verticalScale(10),
+        fontSize: fontSizes.md,
+        backgroundColor: colors.surface,
+        color: colors.textPrimary,
     },
     searchButton: {
-        backgroundColor: "#2563eb",
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 10,
+        backgroundColor: colors.accent,
+        paddingHorizontal: scale(16),
+        paddingVertical: verticalScale(10),
+        borderRadius: moderateScale(10),
     },
     searchButtonText: {
-        color: "#fff",
-        fontWeight: "600",
+        color: colors.accentOnAccent,
+        fontWeight: fontWeights.semiBold,
+        fontSize: fontSizes.sm,
     },
     listContent: {
-        paddingBottom: 24,
+        paddingBottom: verticalScale(24),
     },
     separator: {
-        height: 16,
+        height: verticalScale(16),
     },
     card: {
-        backgroundColor: "#f8fafc",
-        borderRadius: 12,
-        padding: 16,
+        backgroundColor: colors.surface,
+        borderRadius: moderateScale(12),
+        padding: scale(16),
         shadowColor: "#000",
         shadowOpacity: 0.05,
         shadowRadius: 4,
@@ -291,35 +315,38 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     cardTitle: {
-        fontSize: 18,
-        fontWeight: "600",
+        fontSize: fontSizes.lg,
+        fontWeight: fontWeights.semiBold,
         flex: 1,
-        marginRight: 12,
+        marginRight: scale(12),
+        color: colors.textPrimary,
     },
     badge: {
-        paddingVertical: 4,
-        paddingHorizontal: 8,
-        borderRadius: 999,
-        backgroundColor: "#2563eb",
-        color: "#fff",
-        fontSize: 12,
-        fontWeight: "600",
+        paddingVertical: verticalScale(4),
+        paddingHorizontal: scale(8),
+        borderRadius: moderateScale(999),
+        backgroundColor: colors.accent,
+        color: colors.accentOnAccent,
+        fontSize: fontSizes.xs,
+        fontWeight: fontWeights.semiBold,
     },
     cardDescription: {
-        color: "#1f2937",
-        marginBottom: 8,
+        color: colors.textPrimary,
+        marginBottom: verticalScale(8),
+        fontSize: fontSizes.md,
     },
     cardDescriptionMuted: {
-        color: "#9ca3af",
+        color: colors.textMuted,
         fontStyle: "italic",
-        marginBottom: 8,
+        marginBottom: verticalScale(8),
+        fontSize: fontSizes.md,
     },
     cardMeta: {
-        fontSize: 12,
-        color: "#6b7280",
+        fontSize: fontSizes.xs,
+        color: colors.textMuted,
     },
     footer: {
-        paddingVertical: 16,
+        paddingVertical: verticalScale(16),
         alignItems: "center",
         justifyContent: "center",
     },
