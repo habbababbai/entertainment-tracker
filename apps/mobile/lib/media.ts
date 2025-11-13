@@ -1,5 +1,7 @@
 import {
+    mediaItemSchema,
     mediaListSchema,
+    type MediaItem,
     type MediaList,
 } from "@entertainment-tracker/contracts";
 import Constants from "expo-constants";
@@ -60,6 +62,30 @@ export async function fetchMedia({
     }
 
     return mediaListSchema.parse(await response.json());
+}
+
+export async function fetchMediaItem(id: string): Promise<MediaItem> {
+    const trimmedId = id.trim();
+
+    if (!trimmedId) {
+        throw new Error("Media id cannot be empty.");
+    }
+
+    const url = new URL(`/api/v1/media/${encodeURIComponent(trimmedId)}`, API_BASE_URL);
+    const response = await fetch(url.toString());
+
+    if (response.status === 404) {
+        throw new Error("Media item not found.");
+    }
+
+    if (!response.ok) {
+        const message = await response.text();
+        throw new Error(
+            message || `Failed to fetch media item (status ${response.status})`
+        );
+    }
+
+    return mediaItemSchema.parse(await response.json());
 }
 
 export function extractHostSegment(value?: string | null): string | null {
