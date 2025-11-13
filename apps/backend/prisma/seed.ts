@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
@@ -6,14 +7,17 @@ const users = [
     {
         email: "jane.doe@example.com",
         username: "janedoe",
+        password: "Password123!",
     },
     {
         email: "john.smith@example.com",
         username: "johnsmith",
+        password: "Password123!",
     },
     {
         email: "anime.fan@example.com",
         username: "animefan",
+        password: "Password123!",
     },
 ];
 
@@ -39,13 +43,24 @@ async function main(): Promise<void> {
     await prisma.user.deleteMany();
 
     console.info(`Seeding ${users.length} users…`);
+    const saltRounds =
+        Number.parseInt(process.env.BCRYPT_SALT_ROUNDS ?? "12", 10) || 12;
+
     for (const user of users) {
+        const salt = await bcrypt.genSalt(saltRounds);
+        const passwordHash = await bcrypt.hash(user.password, salt);
+
         await prisma.user.upsert({
             where: { email: user.email },
             update: {
                 username: user.username,
+                tokenVersion: 0,
             },
-            create: user,
+            create: {
+                email: user.email,
+                username: user.username,
+                passwordHash,
+            },
         });
     }
 

@@ -7,7 +7,10 @@
         "dev": "turbo run dev",
         "build": "turbo run build",
         "lint": "turbo run lint",
-        "test": "echo \"No root tests defined\" && exit 0",
+        "test": "turbo run test",
+        "be:test": "pnpm --filter @entertainment-tracker/backend test",
+        "be:test:coverage": "pnpm --filter @entertainment-tracker/backend test:coverage",
+        "be:test:watch": "pnpm --filter @entertainment-tracker/backend test:watch",
         "be:dev": "pnpm --filter @entertainment-tracker/backend dev",
         "be:build": "pnpm --filter @entertainment-tracker/backend build",
         "be:lint": "pnpm --filter @entertainment-tracker/backend lint",
@@ -24,12 +27,13 @@
         "mobile:lint": "pnpm --filter @entertainment-tracker/mobile lint",
         "mobile:typecheck": "pnpm --filter @entertainment-tracker/mobile typecheck",
         "mobile:build": "pnpm --filter @entertainment-tracker/mobile build",
-        "mobile:test": "pnpm --filter @entertainment-tracker/mobile test"
+        "mobile:test": "pnpm --filter @entertainment-tracker/mobile test",
+        "mobile:test:watch": "pnpm --filter @entertainment-tracker/mobile test --watchAll=false --watch"
     },
     "keywords": [],
     "author": "",
     "license": "ISC",
-    "packageManager": "pnpm@10.20.0",
+    "packageManager": "pnpm@10.22.0",
     "devDependencies": {
         "babel-plugin-module-resolver": "^5.0.2",
         "eslint": "^9.10.0",

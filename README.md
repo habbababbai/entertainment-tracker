@@ -36,6 +36,12 @@ entertainment-tracker/
     ```bash
     cp apps/backend/env.example apps/backend/.env
     ```
+    Required backend variables:
+    - `DATABASE_URL` – PostgreSQL connection string.
+    - `OMDB_API_KEY` – OMDb API key for media lookups.
+    - `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` – strong random strings used to sign access and refresh tokens.
+    - `JWT_ACCESS_EXPIRES_IN` / `JWT_REFRESH_EXPIRES_IN` – token lifetimes (default `15m` and `7d`).
+    - `BCRYPT_SALT_ROUNDS` – cost factor for password hashing (default `12`).
 3. Start the database (requires Docker Desktop or local PostgreSQL):
 
     ```bash
@@ -58,6 +64,15 @@ entertainment-tracker/
     ```bash
     curl "http://localhost:3000/api/v1/media/tt0133093"
     ```
+
+### Authentication API
+
+- `POST /api/v1/auth/register` — `{ email, username, password }` ⇒ returns JWT access/refresh tokens plus the new user.
+- `POST /api/v1/auth/login` — `{ email, password }` ⇒ returns fresh tokens and user details.
+- `POST /api/v1/auth/refresh` — `{ refreshToken }` ⇒ returns a new token pair when the refresh token is valid.
+- `POST /api/v1/auth/logout` — `{ refreshToken }` ⇒ revokes the refresh token by bumping the user’s `tokenVersion`.
+
+All passwords are hashed with bcrypt on the server. JWTs are required for accessing protected routes; include the access token using the `Authorization: Bearer <token>` header.
 
 ### Handy Database Commands
 
