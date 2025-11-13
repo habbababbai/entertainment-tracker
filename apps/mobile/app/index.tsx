@@ -13,6 +13,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
+import { useRouter } from "expo-router";
 
 import { fetchMedia, type MediaItem, type MediaList } from "../lib/media";
 import "../lib/i18n";
@@ -107,7 +108,12 @@ export default function HomeScreen({
                         {t("home.errorHeading")}
                     </Text>
                     {error?.message ? (
-                        <Text style={styles.errorDetails}>{error.message}</Text>
+                        <Text
+                            style={styles.errorDetails}
+                            testID="media-error-details"
+                        >
+                            {error.message}
+                        </Text>
                     ) : null}
                     <Text style={styles.hint}>{t("common.pullToRetry")}</Text>
                 </View>
@@ -195,7 +201,7 @@ export default function HomeScreen({
                 ListEmptyComponent={listEmptyComponent}
                 ListFooterComponent={
                     isFetchingNextPage && !isError ? (
-                        <View style={styles.footer}>
+                        <View style={styles.footer} testID="media-list-footer">
                             <ActivityIndicator />
                         </View>
                     ) : null
@@ -209,12 +215,25 @@ export default function HomeScreen({
 
 function MediaCard({ item }: { item: MediaItem }) {
     const { t } = useTranslation();
+    const router = useRouter();
     const fallbackLabel = t("common.notAvailable");
     const releaseLabel = formatDate(item.releaseDate, fallbackLabel);
     const updatedLabel = formatDate(item.updatedAt, fallbackLabel);
+    const handlePress = useCallback(() => {
+        router.push({
+            pathname: "/media/[id]",
+            params: { id: item.id },
+        });
+    }, [item.id, router]);
 
     return (
-        <View style={styles.card}>
+        <TouchableOpacity
+            accessibilityRole="button"
+            activeOpacity={0.85}
+            onPress={handlePress}
+            style={styles.card}
+            testID={`media-card-${item.id}`}
+        >
             <View style={styles.cardHeader}>
                 <Text style={styles.cardTitle}>{item.title}</Text>
                 <Text style={styles.badge}>{item.mediaType}</Text>
@@ -235,7 +254,7 @@ function MediaCard({ item }: { item: MediaItem }) {
                     updated: updatedLabel,
                 })}
             </Text>
-        </View>
+        </TouchableOpacity>
     );
 }
 

@@ -18,8 +18,21 @@ export const en = {
         mediaMeta:
             "Source: {{source}} • Released: {{release}} • Updated: {{updated}}",
     },
+    details: {
+        title: "Media Details",
+        back: "Back",
+        loading: "Loading media item…",
+        errorHeading: "Unable to load media item.",
+        missingId: "Missing media identifier.",
+        notFound: "We couldn't find this media item.",
+        retry: "Try again",
+        metadata:
+            "Source: {{source}} • Type: {{mediaType}} • Seasons: {{seasons}} • Episodes: {{episodes}}",
+        releaseDate: "Release date: {{value}}",
+        updatedAt: "Last updated: {{value}}",
+        descriptionHeading: "Overview",
+        posterFallback: "Poster not available.",
+    },
 };
 
 export type AppTranslationContent = typeof en;
-
-

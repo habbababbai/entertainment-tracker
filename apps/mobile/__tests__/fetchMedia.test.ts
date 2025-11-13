@@ -1,5 +1,8 @@
-import { extractHostSegment, resolveApiBaseUrl } from "../lib/media";
-import type { MediaList } from "../lib/media";
+import {
+    extractHostSegment,
+    resolveApiBaseUrl,
+} from "../lib/media";
+import type { MediaItem, MediaList } from "../lib/media";
 
 jest.mock("expo-constants", () => ({
     expoGoConfig: undefined,
@@ -29,23 +32,29 @@ function createSampleList(): MediaList {
     return {
         items: [
             {
-                id: "media-1",
-                externalId: "tt1234567",
-                source: "OMDB",
-                title: "Sample Title",
-                description: "Sample description",
-                posterUrl: null,
-                backdropUrl: null,
-                mediaType: "MOVIE",
-                totalSeasons: null,
-                totalEpisodes: null,
-                releaseDate: "2023-01-01T00:00:00.000Z",
-                createdAt: "2023-01-01T00:00:00.000Z",
-                updatedAt: "2023-01-02T00:00:00.000Z",
+                ...createSampleItem(),
             },
         ],
         hasMore: false,
         nextPage: null,
+    };
+}
+
+function createSampleItem(): MediaItem {
+    return {
+        id: "media-1",
+        externalId: "tt1234567",
+        source: "omdb",
+        title: "Sample Title",
+        description: "Sample description",
+        posterUrl: null,
+        backdropUrl: null,
+        mediaType: "MOVIE",
+        totalSeasons: null,
+        totalEpisodes: null,
+        releaseDate: "2023-01-01T00:00:00.000Z",
+        createdAt: "2023-01-01T00:00:00.000Z",
+        updatedAt: "2023-01-02T00:00:00.000Z",
     };
 }
 
@@ -126,6 +135,70 @@ describe("fetchMedia", () => {
             "Search query cannot be empty."
         );
         expect(fetchMock).not.toHaveBeenCalled();
+    });
+});
+
+describe("fetchMediaItem", () => {
+    it("requests a trimmed id and returns the parsed media item", async () => {
+        process.env.EXPO_PUBLIC_API_URL = "https://api.example.test";
+        const { fetchMediaItem } = await loadModule();
+        const responsePayload = createSampleItem();
+
+        fetchMock.mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: async () => responsePayload,
+        });
+
+        const result = await fetchMediaItem("  tt7654321  ");
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        const [requestedUrl] = fetchMock.mock.calls[0] as [string];
+        const parsed = new URL(requestedUrl);
+
+        expect(parsed.origin + parsed.pathname).toBe(
+            "https://api.example.test/api/v1/media/tt7654321"
+        );
+        expect(result).toEqual(responsePayload);
+    });
+
+    it("throws a specific error when the item is not found", async () => {
+        process.env.EXPO_PUBLIC_API_URL = "https://api.example.test";
+        const { fetchMediaItem } = await loadModule();
+
+        fetchMock.mockResolvedValue({
+            ok: false,
+            status: 404,
+            text: async () => "Media item not found",
+        });
+
+        await expect(fetchMediaItem("ttmissing")).rejects.toThrow(
+            "Media item not found."
+        );
+    });
+
+    it("throws when the id is empty after trimming", async () => {
+        const { fetchMediaItem } = await loadModule();
+
+        await expect(fetchMediaItem("   ")).rejects.toThrow(
+            "Media id cannot be empty."
+        );
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("propagates other HTTP errors", async () => {
+        process.env.EXPO_PUBLIC_API_URL = "https://api.example.test";
+        const { fetchMediaItem } = await loadModule();
+
+        fetchMock.mockResolvedValue({
+            ok: false,
+            status: 500,
+            text: async () => "Internal failure",
+        });
+
+        await expect(fetchMediaItem("ttOops")).rejects.toThrow(
+            "Internal failure"
+        );
     });
 });
 
