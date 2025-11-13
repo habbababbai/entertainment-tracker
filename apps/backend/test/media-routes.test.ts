@@ -3,9 +3,17 @@ import Fastify, { type FastifyInstance } from "fastify";
 
 import { mediaRoutes } from "../src/routes/v1/media.js";
 import {
+    omdbDetailAnimeResponse,
+    omdbDetailLimitedMovieResponse,
     omdbDetailMovieResponse,
+    omdbDetailOffsetMovieResponse,
     omdbDetailSeriesResponse,
+    omdbSearchAnimeResponse,
+    omdbSearchDupesResponse,
+    omdbSearchLimitedResultsResponse,
     omdbSearchNotFoundResponse,
+    omdbSearchOffsetResponse,
+    omdbSearchSingleFallbackResponse,
     omdbSearchSuccessResponse,
 } from "./fixtures/omdb.js";
 
@@ -144,5 +152,189 @@ describe("mediaRoutes", () => {
         expect(payload.hasMore).toBe(false);
         expect(payload.nextPage).toBeNull();
         expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("falls back to search data when detail lookup fails", async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => omdbSearchSingleFallbackResponse,
+        });
+
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                Response: "False",
+                Error: "Detail not found",
+            }),
+        });
+
+        const response = await app.inject({
+            method: "GET",
+            url: "/media",
+            query: {
+                query: "fallback",
+            },
+        });
+
+        expect(response.statusCode).toBe(200);
+        const payload = response.json() as {
+            items: Array<Record<string, unknown>>;
+            hasMore: boolean;
+            nextPage: number | null;
+        };
+
+        expect(payload.items).toHaveLength(1);
+        const item = payload.items[0];
+
+        expect(item).toMatchObject({
+            id: "tt0000003",
+            posterUrl: null,
+            mediaType: "MOVIE",
+            releaseDate: "1999-01-01T00:00:00.000Z",
+        });
+
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("classifies anime titles when genre data indicates anime", async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => omdbSearchAnimeResponse,
+        });
+
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => omdbDetailAnimeResponse,
+        });
+
+        const response = await app.inject({
+            method: "GET",
+            url: "/media",
+            query: {
+                query: "anime",
+            },
+        });
+
+        expect(response.statusCode).toBe(200);
+        const payload = response.json() as {
+            items: Array<Record<string, unknown>>;
+            hasMore: boolean;
+            nextPage: number | null;
+        };
+
+        expect(payload.items).toHaveLength(1);
+        const item = payload.items[0];
+
+        expect(item).toMatchObject({
+            id: "tt0000004",
+            mediaType: "ANIME",
+            releaseDate: "2001-01-01T00:00:00.000Z",
+        });
+
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("deduplicates search results based on imdbID", async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => omdbSearchDupesResponse,
+        });
+
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => omdbDetailMovieResponse,
+        });
+
+        const response = await app.inject({
+            method: "GET",
+            url: "/media",
+            query: {
+                query: "dupe",
+            },
+        });
+
+        expect(response.statusCode).toBe(200);
+        const payload = response.json() as {
+            items: Array<Record<string, unknown>>;
+            hasMore: boolean;
+            nextPage: number | null;
+        };
+
+        expect(payload.items).toHaveLength(1);
+        expect(payload.hasMore).toBe(true);
+        expect(payload.nextPage).toBe(2);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("reports lack of next page when total results exhausted", async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => omdbSearchLimitedResultsResponse,
+        });
+
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => omdbDetailLimitedMovieResponse,
+        });
+
+        const response = await app.inject({
+            method: "GET",
+            url: "/media",
+            query: {
+                query: "limited",
+                limit: "1",
+            },
+        });
+
+        expect(response.statusCode).toBe(200);
+        const payload = response.json() as {
+            items: Array<Record<string, unknown>>;
+            hasMore: boolean;
+            nextPage: number | null;
+        };
+
+        expect(payload.items).toHaveLength(1);
+        expect(payload.hasMore).toBe(false);
+        expect(payload.nextPage).toBeNull();
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("skips to the proper OMDb page when offset requires it", async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => omdbSearchOffsetResponse,
+        });
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => omdbDetailOffsetMovieResponse,
+        });
+
+        const response = await app.inject({
+            method: "GET",
+            url: "/media",
+            query: {
+                query: "paged",
+                limit: "1",
+                page: "11",
+            },
+        });
+
+        expect(response.statusCode).toBe(200);
+        const payload = response.json() as {
+            items: Array<Record<string, unknown>>;
+            hasMore: boolean;
+            nextPage: number | null;
+        };
+
+        expect(payload.items).toHaveLength(1);
+        expect(payload.nextPage).toBe(12);
+        expect(payload.hasMore).toBe(true);
+        expect(payload.items[0]).toMatchObject({
+            id: "ttOffset11",
+            title: "Paged Movie 11",
+        });
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        const firstCallUrl = new URL(fetchMock.mock.calls[0][0] as string);
+        expect(firstCallUrl.searchParams.get("page")).toBe("2");
     });
 });
