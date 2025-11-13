@@ -75,6 +75,11 @@ entertainment-tracker/
 -   Lint backend sources: `pnpm be:lint`
 -   Type-check backend code: `pnpm be:typecheck`
 -   Build backend bundle: `pnpm be:build`
+-   Run backend tests once: `pnpm --filter @entertainment-tracker/backend test`
+-   Watch backend tests: `pnpm --filter @entertainment-tracker/backend test:watch`
+-   Generate backend coverage report: `pnpm --filter @entertainment-tracker/backend test:coverage`
+
+Backend tests use Vitest with globally stubbed environment variables defined in `apps/backend/test/setup.ts`. Shared OMDb payload fixtures live under `apps/backend/test/fixtures` to keep scenarios consistent across suites.
 
 ### Mobile Workflows
 

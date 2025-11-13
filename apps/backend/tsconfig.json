@@ -4,7 +4,7 @@
         "rootDir": "./src",
         "outDir": "./dist",
         "tsBuildInfoFile": "./node_modules/.cache/tsbuildinfo.backend",
-        "types": ["node"]
+        "types": ["node", "vitest/globals"]
     },
     "include": ["src/**/*.ts"],
     "exclude": ["src/**/*.test.ts", "src/**/*.spec.ts"]
