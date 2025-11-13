@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyPluginAsync } from "fastify";
 import {
+    mediaItemSchema,
     mediaListSchema,
     type MediaItem,
     type MediaList,
@@ -13,6 +14,43 @@ const MAX_LIMIT = 15;
 const OMDB_BASE_URL = "https://www.omdbapi.com/";
 const OMDB_PAGE_SIZE = 10;
 const MAX_OMDB_PAGES = 100;
+
+const mediaItemResponseSchema = {
+    type: "object",
+    properties: {
+        id: { type: "string" },
+        externalId: { type: "string" },
+        source: { type: "string" },
+        title: { type: "string" },
+        description: {
+            type: ["string", "null"],
+        },
+        posterUrl: { type: ["string", "null"] },
+        backdropUrl: {
+            type: ["string", "null"],
+        },
+        mediaType: {
+            type: "string",
+            enum: mediaTypeSchema.options,
+        },
+        totalSeasons: {
+            type: ["integer", "null"],
+        },
+        totalEpisodes: {
+            type: ["integer", "null"],
+        },
+        releaseDate: {
+            type: ["string", "null"],
+        },
+        createdAt: {
+            type: ["string", "null"],
+        },
+        updatedAt: {
+            type: ["string", "null"],
+        },
+    },
+    required: ["id", "externalId", "source", "title", "mediaType"],
+} as const;
 
 interface OmdbSearchItem {
     Title: string;
@@ -42,6 +80,48 @@ interface OmdbDetailResponse extends OmdbSearchItem {
 }
 
 export const mediaRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
+    app.get(
+        "/media/:id",
+        {
+            schema: {
+                params: {
+                    type: "object",
+                    properties: {
+                        id: { type: "string", minLength: 1 },
+                    },
+                    required: ["id"],
+                    additionalProperties: false,
+                },
+                response: {
+                    200: mediaItemResponseSchema,
+                    404: {
+                        type: "object",
+                        properties: {
+                            statusCode: { type: "integer", const: 404 },
+                            error: { type: "string" },
+                            message: { type: "string" },
+                        },
+                        required: ["statusCode", "error", "message"],
+                    },
+                },
+            },
+        },
+        async (request, reply) => {
+            const { id } = request.params as { id: string };
+            const mediaItem = await fetchOmdbMediaById(app, id);
+
+            if (!mediaItem) {
+                return reply.status(404).send({
+                    statusCode: 404,
+                    error: "Not Found",
+                    message: "Media item not found",
+                });
+            }
+
+            return mediaItemSchema.parse(mediaItem);
+        }
+    );
+
     app.get(
         "/media",
         {
@@ -74,48 +154,7 @@ export const mediaRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
                         properties: {
                             items: {
                                 type: "array",
-                                items: {
-                                    type: "object",
-                                    properties: {
-                                        id: { type: "string" },
-                                        externalId: { type: "string" },
-                                        source: { type: "string" },
-                                        title: { type: "string" },
-                                        description: {
-                                            type: ["string", "null"],
-                                        },
-                                        posterUrl: { type: ["string", "null"] },
-                                        backdropUrl: {
-                                            type: ["string", "null"],
-                                        },
-                                        mediaType: {
-                                            type: "string",
-                                            enum: mediaTypeSchema.options,
-                                        },
-                                        totalSeasons: {
-                                            type: ["integer", "null"],
-                                        },
-                                        totalEpisodes: {
-                                            type: ["integer", "null"],
-                                        },
-                                        releaseDate: {
-                                            type: ["string", "null"],
-                                        },
-                                        createdAt: {
-                                            type: ["string", "null"],
-                                        },
-                                        updatedAt: {
-                                            type: ["string", "null"],
-                                        },
-                                    },
-                                    required: [
-                                        "id",
-                                        "externalId",
-                                        "source",
-                                        "title",
-                                        "mediaType",
-                                    ],
-                                },
+                                items: mediaItemResponseSchema,
                             },
                             hasMore: { type: "boolean" },
                             nextPage: {
@@ -156,6 +195,36 @@ export const mediaRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
         }
     );
 };
+
+async function fetchOmdbMediaById(
+    app: FastifyInstance,
+    id: string
+): Promise<MediaItem | null> {
+    const trimmedId = id.trim();
+    if (!trimmedId) {
+        return null;
+    }
+
+    const detail = await requestOmdb<OmdbDetailResponse>(app, {
+        i: trimmedId,
+        plot: "short",
+    });
+
+    if (detail.Response === "False") {
+        if (detail.Error === "Movie not found!") {
+            return null;
+        }
+
+        throw new Error(detail.Error ?? "Unknown OMDb detail error");
+    }
+
+    const mapped = mapOmdbDetail(detail);
+    if (!mapped) {
+        throw new Error("Failed to map OMDb detail response");
+    }
+
+    return mapped;
+}
 
 async function fetchOmdbMedia(
     app: FastifyInstance,
