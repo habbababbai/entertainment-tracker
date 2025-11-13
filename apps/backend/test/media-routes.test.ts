@@ -42,6 +42,136 @@ describe("mediaRoutes", () => {
         globalThis.fetch = originalFetch;
     });
 
+    it("returns media item details for a known id", async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => omdbDetailMovieResponse,
+        });
+
+        const response = await app.inject({
+            method: "GET",
+            url: "/media/tt0000001",
+        });
+
+        expect(response.statusCode).toBe(200);
+        const payload = response.json() as Record<string, unknown>;
+
+        expect(payload).toMatchObject({
+            id: "tt0000001",
+            externalId: "tt0000001",
+            title: "Sample Movie",
+            mediaType: "MOVIE",
+        });
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        const firstCallUrl = new URL(fetchMock.mock.calls[0][0] as string);
+        expect(firstCallUrl.searchParams.get("i")).toBe("tt0000001");
+        expect(firstCallUrl.searchParams.get("plot")).toBe("short");
+    });
+
+    it("returns 404 when OMDb reports the media id is missing", async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                Response: "False",
+                Error: "Movie not found!",
+            }),
+        });
+
+        const response = await app.inject({
+            method: "GET",
+            url: "/media/unknown-id",
+        });
+
+        expect(response.statusCode).toBe(404);
+        const payload = response.json() as Record<string, unknown>;
+
+        expect(payload).toMatchObject({
+            statusCode: 404,
+            error: "Not Found",
+            message: "Media item not found",
+        });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        const firstCallUrl = new URL(fetchMock.mock.calls[0][0] as string);
+        expect(firstCallUrl.searchParams.get("i")).toBe("unknown-id");
+    });
+
+    it("returns 404 without calling OMDb when id is only whitespace", async () => {
+        const response = await app.inject({
+            method: "GET",
+            url: "/media/%20%20%20",
+        });
+
+        expect(response.statusCode).toBe(404);
+        expect(fetchMock).not.toHaveBeenCalled();
+        const payload = response.json() as Record<string, unknown>;
+        expect(payload).toMatchObject({
+            statusCode: 404,
+            error: "Not Found",
+            message: "Media item not found",
+        });
+    });
+
+    it("returns 500 when OMDb detail lookup fails with a non-not-found error", async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                Response: "False",
+                Error: "Internal error",
+            }),
+        });
+
+        const response = await app.inject({
+            method: "GET",
+            url: "/media/ttError",
+        });
+
+        expect(response.statusCode).toBe(500);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns 500 when mapped OMDb detail is unexpectedly null", async () => {
+        const omdbModule = await import("../src/lib/omdb/index.js");
+        const mapSpy = vi
+            .spyOn(omdbModule, "mapOmdbDetail")
+            .mockReturnValueOnce(null);
+
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                Response: "True",
+                Title: "Inconsistent entry",
+                imdbID: "ttNullDetail",
+            }),
+        });
+
+        const response = await app.inject({
+            method: "GET",
+            url: "/media/ttNullDetail",
+        });
+
+        expect(response.statusCode).toBe(500);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+
+        mapSpy.mockRestore();
+    });
+
+    it("returns 500 when OMDb request responds with non-OK status", async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: false,
+            status: 503,
+            text: async () => "Service unavailable",
+        });
+
+        const response = await app.inject({
+            method: "GET",
+            url: "/media/ttServiceDown",
+        });
+
+        expect(response.statusCode).toBe(500);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
     it("returns mapped media items when OMDb responds with results", async () => {
         fetchMock.mockResolvedValueOnce({
             ok: true,
@@ -132,6 +262,27 @@ describe("mediaRoutes", () => {
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
+    it("propagates OMDb search errors other than not found", async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                Response: "False",
+                Error: "Too many requests",
+            }),
+        });
+
+        const response = await app.inject({
+            method: "GET",
+            url: "/media",
+            query: {
+                query: "error",
+            },
+        });
+
+        expect(response.statusCode).toBe(500);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
     it("short-circuits when query is only whitespace", async () => {
         const response = await app.inject({
             method: "GET",
@@ -191,6 +342,59 @@ describe("mediaRoutes", () => {
             posterUrl: null,
             mediaType: "MOVIE",
             releaseDate: "1999-01-01T00:00:00.000Z",
+        });
+
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("maps missing detail fields to nulls when OMDb data is unavailable", async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                Response: "True",
+                Search: [
+                    {
+                        Title: "Mystery Entry",
+                        imdbID: "ttMissingFields",
+                        Type: "movie",
+                    },
+                ],
+                totalResults: "1",
+            }),
+        });
+
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                Response: "True",
+                Title: "Mystery Entry",
+                imdbID: "ttMissingFields",
+                Plot: "N/A",
+                Poster: "N/A",
+                Released: "not-a-date",
+                Year: "N/A",
+            }),
+        });
+
+        const response = await app.inject({
+            method: "GET",
+            url: "/media",
+            query: {
+                query: "mystery",
+            },
+        });
+
+        expect(response.statusCode).toBe(200);
+        const payload = response.json() as {
+            items: Array<Record<string, unknown>>;
+        };
+
+        expect(payload.items).toHaveLength(1);
+        expect(payload.items[0]).toMatchObject({
+            id: "ttMissingFields",
+            description: null,
+            posterUrl: null,
+            releaseDate: null,
         });
 
         expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -264,6 +468,45 @@ describe("mediaRoutes", () => {
         expect(payload.hasMore).toBe(true);
         expect(payload.nextPage).toBe(2);
         expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("returns empty list when requested page offset exceeds total OMDb results", async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                Response: "True",
+                totalResults: "3",
+                Search: [
+                    {
+                        Title: "Too Far",
+                        imdbID: "ttTooFar",
+                        Type: "movie",
+                    },
+                ],
+            }),
+        });
+
+        const response = await app.inject({
+            method: "GET",
+            url: "/media",
+            query: {
+                query: "offset",
+                limit: "3",
+                page: "2",
+            },
+        });
+
+        expect(response.statusCode).toBe(200);
+        const payload = response.json() as {
+            items: unknown[];
+            hasMore: boolean;
+            nextPage: number | null;
+        };
+
+        expect(payload.items).toHaveLength(0);
+        expect(payload.hasMore).toBe(false);
+        expect(payload.nextPage).toBeNull();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     it("reports lack of next page when total results exhausted", async () => {
