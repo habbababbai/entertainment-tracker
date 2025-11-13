@@ -130,6 +130,32 @@ describe("mediaRoutes", () => {
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
+    it("returns 500 when mapped OMDb detail is unexpectedly null", async () => {
+        const omdbModule = await import("../src/lib/omdb/index.js");
+        const mapSpy = vi
+            .spyOn(omdbModule, "mapOmdbDetail")
+            .mockReturnValueOnce(null);
+
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                Response: "True",
+                Title: "Inconsistent entry",
+                imdbID: "ttNullDetail",
+            }),
+        });
+
+        const response = await app.inject({
+            method: "GET",
+            url: "/media/ttNullDetail",
+        });
+
+        expect(response.statusCode).toBe(500);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+
+        mapSpy.mockRestore();
+    });
+
     it("returns 500 when OMDb request responds with non-OK status", async () => {
         fetchMock.mockResolvedValueOnce({
             ok: false,
@@ -233,6 +259,27 @@ describe("mediaRoutes", () => {
         expect(payload.items).toHaveLength(0);
         expect(payload.hasMore).toBe(false);
         expect(payload.nextPage).toBeNull();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("propagates OMDb search errors other than not found", async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                Response: "False",
+                Error: "Too many requests",
+            }),
+        });
+
+        const response = await app.inject({
+            method: "GET",
+            url: "/media",
+            query: {
+                query: "error",
+            },
+        });
+
+        expect(response.statusCode).toBe(500);
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
@@ -421,6 +468,45 @@ describe("mediaRoutes", () => {
         expect(payload.hasMore).toBe(true);
         expect(payload.nextPage).toBe(2);
         expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("returns empty list when requested page offset exceeds total OMDb results", async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                Response: "True",
+                totalResults: "3",
+                Search: [
+                    {
+                        Title: "Too Far",
+                        imdbID: "ttTooFar",
+                        Type: "movie",
+                    },
+                ],
+            }),
+        });
+
+        const response = await app.inject({
+            method: "GET",
+            url: "/media",
+            query: {
+                query: "offset",
+                limit: "3",
+                page: "2",
+            },
+        });
+
+        expect(response.statusCode).toBe(200);
+        const payload = response.json() as {
+            items: unknown[];
+            hasMore: boolean;
+            nextPage: number | null;
+        };
+
+        expect(payload.items).toHaveLength(0);
+        expect(payload.hasMore).toBe(false);
+        expect(payload.nextPage).toBeNull();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     it("reports lack of next page when total results exhausted", async () => {
