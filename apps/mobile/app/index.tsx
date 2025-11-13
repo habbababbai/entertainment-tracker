@@ -80,8 +80,70 @@ export default function HomeScreen() {
 
     const isRefreshing = isRefetching && !isFetchingNextPage;
     const trimmedSubmitted = submittedSearch.trim();
+    const showSearchPrompt = trimmedSubmitted.length === 0;
     const showEmptyState =
         !isLoading && !isFetchingNextPage && items.length === 0;
+
+    const listEmptyComponent = useMemo(() => {
+        if (isLoading) {
+            return (
+                <View style={styles.centerContent}>
+                    <ActivityIndicator size="large" />
+                    <Text style={styles.statusText}>{t("home.loading")}</Text>
+                </View>
+            );
+        }
+
+        if (isError) {
+            return (
+                <View style={styles.centerContent}>
+                    <Text style={styles.errorText}>
+                        {t("home.errorHeading")}
+                    </Text>
+                    {error?.message ? (
+                        <Text style={styles.errorDetails}>{error.message}</Text>
+                    ) : null}
+                    <Text style={styles.hint}>{t("common.pullToRetry")}</Text>
+                </View>
+            );
+        }
+
+        if (showSearchPrompt) {
+            return (
+                <View style={styles.centerContent}>
+                    <Text style={styles.statusText}>
+                        {t("home.startTyping")}
+                    </Text>
+                </View>
+            );
+        }
+
+        if (showEmptyState) {
+            return (
+                <View style={styles.centerContent}>
+                    <Text style={styles.statusText}>{t("home.emptyList")}</Text>
+                </View>
+            );
+        }
+
+        return null;
+    }, [
+        error?.message,
+        isError,
+        isLoading,
+        showEmptyState,
+        showSearchPrompt,
+        t,
+    ]);
+
+    const listContentStyle = useMemo(
+        () => [
+            styles.listContent,
+            (isError || showEmptyState || showSearchPrompt || isLoading) &&
+                styles.listContentCentered,
+        ],
+        [isError, isLoading, showEmptyState, showSearchPrompt]
+    );
 
     return (
         <SafeAreaView style={styles.container}>
@@ -109,62 +171,32 @@ export default function HomeScreen() {
                 </TouchableOpacity>
             </View>
 
-            {trimmedSubmitted.length === 0 ? (
-                <View style={styles.centerContent}>
-                    <Text style={styles.statusText}>
-                        {t("home.startTyping")}
-                    </Text>
-                </View>
-            ) : isLoading ? (
-                <View style={styles.centerContent}>
-                    <ActivityIndicator size="large" />
-                    <Text style={styles.statusText}>{t("home.loading")}</Text>
-                </View>
-            ) : isError ? (
-                <View style={styles.centerContent}>
-                    <Text style={styles.errorText}>
-                        {t("home.errorHeading")}
-                    </Text>
-                    <Text style={styles.errorDetails}>{error.message}</Text>
-                    <Text style={styles.hint}>{t("common.pullToRetry")}</Text>
-                </View>
-            ) : (
-                <FlatList
-                    testID="media-list"
-                    data={items}
-                    keyExtractor={(item) => item.id}
-                    contentContainerStyle={styles.listContent}
-                    keyboardShouldPersistTaps="handled"
-                    refreshControl={
-                        <RefreshControl
-                            refreshing={isRefreshing}
-                            onRefresh={handleRefresh}
-                        />
-                    }
-                    ItemSeparatorComponent={() => (
-                        <View style={styles.separator} />
-                    )}
-                    renderItem={({ item }) => <MediaCard item={item} />}
-                    ListEmptyComponent={
-                        showEmptyState ? (
-                            <View style={styles.centerContent}>
-                                <Text style={styles.statusText}>
-                                    {t("home.emptyList")}
-                                </Text>
-                            </View>
-                        ) : null
-                    }
-                    ListFooterComponent={
-                        isFetchingNextPage ? (
-                            <View style={styles.footer}>
-                                <ActivityIndicator />
-                            </View>
-                        ) : null
-                    }
-                    onEndReached={handleEndReached}
-                    onEndReachedThreshold={0.5}
-                />
-            )}
+            <FlatList
+                testID="media-list"
+                data={items}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={listContentStyle}
+                keyboardShouldPersistTaps="handled"
+                refreshControl={
+                    <RefreshControl
+                        enabled={!showSearchPrompt}
+                        refreshing={isRefreshing}
+                        onRefresh={handleRefresh}
+                    />
+                }
+                ItemSeparatorComponent={() => <View style={styles.separator} />}
+                renderItem={({ item }) => <MediaCard item={item} />}
+                ListEmptyComponent={listEmptyComponent}
+                ListFooterComponent={
+                    isFetchingNextPage && !isError ? (
+                        <View style={styles.footer}>
+                            <ActivityIndicator />
+                        </View>
+                    ) : null
+                }
+                onEndReached={handleEndReached}
+                onEndReachedThreshold={0.5}
+            />
         </SafeAreaView>
     );
 }
@@ -294,6 +326,10 @@ const styles = StyleSheet.create({
     },
     listContent: {
         paddingBottom: verticalScale(24),
+    },
+    listContentCentered: {
+        flexGrow: 1,
+        justifyContent: "center",
     },
     separator: {
         height: verticalScale(16),
