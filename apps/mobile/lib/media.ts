@@ -1,12 +1,30 @@
 import {
     mediaListSchema,
-    type MediaItem,
     type MediaList,
 } from "@entertainment-tracker/contracts";
 import Constants from "expo-constants";
 import { NativeModules } from "react-native";
 
 export type { MediaItem, MediaList } from "@entertainment-tracker/contracts";
+
+interface ExpoConstantsLike {
+    expoGoConfig?: { hostUri?: string | null } | null;
+    expoConfig?: { hostUri?: string | null } | null;
+    manifest?: { hostUri?: string | null } | null;
+    manifest2?: {
+        extra?: {
+            expoGo?: {
+                developer?: {
+                    host?: string | null;
+                } | null;
+            } | null;
+        } | null;
+    } | null;
+}
+
+interface NativeModulesLike {
+    SourceCode?: { scriptURL?: string } | null;
+}
 
 const API_BASE_URL = resolveApiBaseUrl();
 
@@ -44,30 +62,41 @@ export async function fetchMedia({
     return mediaListSchema.parse(await response.json());
 }
 
-function resolveApiBaseUrl(): string {
-    const explicit = process.env.EXPO_PUBLIC_API_URL?.trim();
+export function extractHostSegment(value?: string | null): string | null {
+    if (!value) {
+        return null;
+    }
+
+    const host = value.split(":")[0]?.trim();
+    return host ? host : null;
+}
+
+export function resolveApiBaseUrl(
+    constants: ExpoConstantsLike = Constants,
+    nativeModules: NativeModulesLike = NativeModules,
+    env: Partial<NodeJS.ProcessEnv> = process.env
+): string {
+    const explicit = env.EXPO_PUBLIC_API_URL?.trim();
     if (explicit) {
         return explicit;
     }
 
     const hostUri =
-        Constants.expoGoConfig?.hostUri ??
-        Constants.expoConfig?.hostUri ??
-        Constants.manifest?.hostUri ??
-        Constants.manifest2?.extra?.expoGo?.developer?.host ??
+        constants.expoGoConfig?.hostUri ??
+        constants.expoConfig?.hostUri ??
+        constants.manifest?.hostUri ??
+        constants.manifest2?.extra?.expoGo?.developer?.host ??
         null;
 
-    if (hostUri) {
-        const host = hostUri.split(":")[0];
-        if (host) {
-            return `http://${host}:3000`;
-        }
+    const hostFromExpo = extractHostSegment(hostUri);
+    if (hostFromExpo) {
+        return `http://${hostFromExpo}:3000`;
     }
 
-    const scriptURL: string | undefined = NativeModules?.SourceCode?.scriptURL;
+    const scriptURL: string | undefined = nativeModules?.SourceCode?.scriptURL;
     if (scriptURL) {
         const hostPort = scriptURL.split("://")[1]?.split("/")[0] ?? "";
-        const host = hostPort.split(":")[0];
+        const host = extractHostSegment(hostPort);
         if (host) {
             return `http://${host}:3000`;
         }
