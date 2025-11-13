@@ -14,6 +14,14 @@ import HomeScreen from "../app/index";
 import type { MediaItem, MediaList } from "../lib/media";
 import { fetchMedia } from "../lib/media";
 
+const mockPush = jest.fn();
+
+jest.mock("expo-router", () => ({
+    useRouter: () => ({
+        push: mockPush,
+    }),
+}));
+
 jest.mock("../lib/media", () => {
     const actual = jest.requireActual("../lib/media");
     return {
@@ -28,6 +36,7 @@ const activeClients = new Set<QueryClient>();
 const originalScheduler = notifyManager.schedule;
 
 beforeAll(() => {
+    jest.useFakeTimers();
     notifyManager.setScheduler((callback) => {
         callback();
     });
@@ -35,6 +44,7 @@ beforeAll(() => {
 
 afterAll(() => {
     notifyManager.setScheduler(originalScheduler);
+    jest.useRealTimers();
 });
 
 function createQueryClient() {
@@ -63,6 +73,10 @@ function renderHomeScreen(options?: Parameters<typeof HomeScreen>[0]) {
             </QueryClientProvider>
         </SafeAreaProvider>
     );
+
+    act(() => {
+        jest.runOnlyPendingTimers();
+    });
 
     return { ...utils, queryClient };
 }
@@ -96,6 +110,7 @@ function createMediaItem(overrides: Partial<MediaItem> = {}): MediaItem {
 
 beforeEach(() => {
     fetchMediaMock.mockReset();
+    mockPush.mockReset();
 });
 
 afterEach(async () => {
@@ -144,6 +159,29 @@ describe("HomeScreen UI", () => {
         expect(
             getByText("Source: OMDB • Released: N/A • Updated: N/A")
         ).toBeTruthy();
+    });
+
+    it("navigates to the item details screen when a card is pressed", async () => {
+        fetchMediaMock.mockResolvedValueOnce(
+            createMediaList([
+                createMediaItem({
+                    id: "media-701",
+                    title: "Spirited Away",
+                }),
+            ])
+        );
+
+        const { findByTestId } = renderHomeScreen();
+
+        const card = await findByTestId("media-card-media-701");
+        await act(async () => {
+            fireEvent.press(card);
+        });
+
+        expect(mockPush).toHaveBeenCalledWith({
+            pathname: "/media/[id]",
+            params: { id: "media-701" },
+        });
     });
 
     it("shows an error message when the query fails", async () => {
