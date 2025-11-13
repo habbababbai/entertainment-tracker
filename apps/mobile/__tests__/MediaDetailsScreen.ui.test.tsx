@@ -231,4 +231,15 @@ describe("MediaDetailsScreen", () => {
         expect(fetchMediaItemMock).toHaveBeenCalledTimes(2);
         expect(await findByText("Recovered Title")).toBeTruthy();
     });
+
+    it("shows the shared empty description message when no overview is available", async () => {
+        fetchMediaItemMock.mockResolvedValueOnce(
+            createMediaItem({ description: null })
+        );
+
+        const { findByText } = renderDetailsScreen();
+
+        expect(await findByText("Overview")).toBeTruthy();
+        expect(await findByText("No description provided.")).toBeTruthy();
+    });
 });

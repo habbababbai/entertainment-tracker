@@ -252,7 +252,7 @@ it("omits error details when the query fails without a message", async () => {
                     createMediaItem({ id: "media-401", title: "Mob Psycho" }),
                 ]),
                 hasMore: true,
-                nextPage: 2,
+            nextPage: "2" as unknown as number,
             })
             .mockResolvedValueOnce(
                 createMediaList([
@@ -378,4 +378,33 @@ it("disables pull-to-refresh when no search has been submitted", async () => {
 
     const list = getByTestId("media-list");
     expect(list.props.refreshControl.props.enabled).toBe(false);
+});
+
+it("falls back to the first page when the next page value is not numeric", async () => {
+    fetchMediaMock
+        .mockResolvedValueOnce({
+            ...createMediaList([
+                createMediaItem({ id: "media-801", title: "Fallback Alpha" }),
+            ]),
+            hasMore: true,
+            nextPage: "" as unknown as number,
+        })
+        .mockResolvedValueOnce(
+            createMediaList([
+                createMediaItem({ id: "media-802", title: "Fallback Beta" }),
+            ])
+        );
+
+    const { getByTestId, findByText } = renderHomeScreen();
+
+    await findByText("Fallback Alpha");
+
+    const list = getByTestId("media-list");
+    await act(async () => {
+        fireEvent(list, "onEndReached");
+    });
+
+    await waitFor(() => expect(fetchMediaMock).toHaveBeenCalledTimes(2));
+    const [, secondCall] = fetchMediaMock.mock.calls;
+    expect(secondCall?.[0]?.page).toBe(1);
 });
