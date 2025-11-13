@@ -2,6 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 
 import { mediaRoutes } from "../src/routes/v1/media.js";
+import {
+    omdbDetailMovieResponse,
+    omdbDetailSeriesResponse,
+    omdbSearchNotFoundResponse,
+    omdbSearchSuccessResponse,
+} from "./fixtures/omdb.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -31,58 +37,17 @@ describe("mediaRoutes", () => {
     it("returns mapped media items when OMDb responds with results", async () => {
         fetchMock.mockResolvedValueOnce({
             ok: true,
-            json: async () => ({
-                Response: "True",
-                totalResults: "3",
-                Search: [
-                    {
-                        Title: "Sample Movie",
-                        imdbID: "tt0000001",
-                        Type: "movie",
-                        Poster: "https://example.com/poster.jpg",
-                    },
-                    {
-                        Title: "Sample Series",
-                        imdbID: "tt0000002",
-                        Type: "series",
-                        Poster: "https://example.com/poster-series.jpg",
-                    },
-                ],
-            }),
+            json: async () => omdbSearchSuccessResponse,
         });
 
         fetchMock.mockResolvedValueOnce({
             ok: true,
-            json: async () => ({
-                Response: "True",
-                Title: "Sample Movie",
-                imdbID: "tt0000001",
-                Type: "movie",
-                Plot: "An exciting plot.",
-                Poster: "https://example.com/poster.jpg",
-                Released: "2020-05-04",
-                Genre: "Action",
-                Country: "USA",
-                totalSeasons: "N/A",
-                totalEpisodes: "N/A",
-            }),
+            json: async () => omdbDetailMovieResponse,
         });
 
         fetchMock.mockResolvedValueOnce({
             ok: true,
-            json: async () => ({
-                Response: "True",
-                Title: "Sample Series",
-                imdbID: "tt0000002",
-                Type: "series",
-                Plot: "A thrilling series.",
-                Poster: "https://example.com/poster-series.jpg",
-                Released: "2019-01-10",
-                Genre: "Animation",
-                Country: "Japan",
-                totalSeasons: "2",
-                totalEpisodes: "24",
-            }),
+            json: async () => omdbDetailSeriesResponse,
         });
 
         const response = await app.inject({
@@ -135,10 +100,7 @@ describe("mediaRoutes", () => {
     it("returns empty list when OMDb reports no matches", async () => {
         fetchMock.mockResolvedValueOnce({
             ok: true,
-            json: async () => ({
-                Response: "False",
-                Error: "Movie not found!",
-            }),
+            json: async () => omdbSearchNotFoundResponse,
         });
 
         const response = await app.inject({
