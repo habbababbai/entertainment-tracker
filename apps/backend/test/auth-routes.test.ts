@@ -129,6 +129,23 @@ describe("authRoutes", () => {
         expect(prisma.user.create).toHaveBeenCalledTimes(1);
     });
 
+    it("propagates unexpected errors during registration", async () => {
+        prisma.user.create.mockRejectedValueOnce(new Error("db down"));
+
+        const response = await app.inject({
+            method: "POST",
+            url: "/auth/register",
+            payload: {
+                email: "error@example.com",
+                password: "Password123!",
+                username: "erroruser",
+            },
+        });
+
+        expect(response.statusCode).toBe(500);
+        expect(prisma.user.create).toHaveBeenCalledTimes(1);
+    });
+
     it("logs in an existing user with valid credentials", async () => {
         const passwordHash = await hashPassword("Password123!");
         prisma.user.findUnique.mockResolvedValueOnce(
@@ -157,6 +174,21 @@ describe("authRoutes", () => {
 
         const access = verifyAccessToken(payload.accessToken);
         expect(access.sub).toBe("user-login");
+    });
+
+    it("rejects login when user is not found", async () => {
+        prisma.user.findUnique.mockResolvedValueOnce(null);
+
+        const response = await app.inject({
+            method: "POST",
+            url: "/auth/login",
+            payload: {
+                email: "missing@example.com",
+                password: "Password123!",
+            },
+        });
+
+        expect(response.statusCode).toBe(401);
     });
 
     it("rejects login when password is incorrect", async () => {
@@ -216,6 +248,48 @@ describe("authRoutes", () => {
 
         const decoded = verifyRefreshToken(payload.refreshToken);
         expect(decoded.sub).toBe("user-refresh");
+    });
+
+    it("rejects refresh requests with invalid token", async () => {
+        const response = await app.inject({
+            method: "POST",
+            url: "/auth/refresh",
+            payload: {
+                refreshToken: "invalid-token",
+            },
+        });
+
+        expect(response.statusCode).toBe(401);
+    });
+
+    it("rejects refresh when tokenVersion no longer matches", async () => {
+        const user = buildUser({
+            id: "user-mismatch",
+            email: "mismatch@example.com",
+            username: "mismatch",
+            tokenVersion: 1,
+        });
+
+        const { refreshToken } = issueTokenPair({
+            id: user.id,
+            tokenVersion: user.tokenVersion,
+        });
+
+        // Simulate tokenVersion bump in DB
+        prisma.user.findUnique.mockResolvedValueOnce({
+            ...user,
+            tokenVersion: user.tokenVersion + 1,
+        });
+
+        const response = await app.inject({
+            method: "POST",
+            url: "/auth/refresh",
+            payload: {
+                refreshToken,
+            },
+        });
+
+        expect(response.statusCode).toBe(401);
     });
 
     it("invalidates refresh tokens on logout by incrementing tokenVersion", async () => {
