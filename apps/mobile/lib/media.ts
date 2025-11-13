@@ -71,7 +71,10 @@ export async function fetchMediaItem(id: string): Promise<MediaItem> {
         throw new Error("Media id cannot be empty.");
     }
 
-    const url = new URL(`/api/v1/media/${encodeURIComponent(trimmedId)}`, API_BASE_URL);
+    const url = new URL(
+        `/api/v1/media/${encodeURIComponent(trimmedId)}`,
+        API_BASE_URL
+    );
     const response = await fetch(url.toString());
 
     if (response.status === 404) {
