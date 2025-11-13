@@ -2,6 +2,7 @@
     "extends": "@entertainment-tracker/tsconfig/react-native.json",
     "compilerOptions": {
         "baseUrl": ".",
+        "types": ["jest", "react", "react-native"],
         "paths": {
             "@/*": ["./*"],
             "~/*": ["./*"]
@@ -11,6 +12,8 @@
         "app",
         "App.tsx",
         "assets",
+        "__tests__",
+        "jest.setup.ts",
         ".expo/types/**/*.ts",
         "expo-env.d.ts"
     ]

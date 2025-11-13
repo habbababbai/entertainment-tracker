@@ -23,7 +23,8 @@
         "mobile:dev": "pnpm --filter @entertainment-tracker/mobile dev",
         "mobile:lint": "pnpm --filter @entertainment-tracker/mobile lint",
         "mobile:typecheck": "pnpm --filter @entertainment-tracker/mobile typecheck",
-        "mobile:build": "pnpm --filter @entertainment-tracker/mobile build"
+        "mobile:build": "pnpm --filter @entertainment-tracker/mobile build",
+        "mobile:test": "pnpm --filter @entertainment-tracker/mobile test"
     },
     "keywords": [],
     "author": "",
