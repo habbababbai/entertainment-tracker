@@ -7,6 +7,7 @@ import {
     waitFor,
 } from "@testing-library/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { notifyManager } from "@tanstack/query-core";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import HomeScreen from "../app/index";
@@ -24,19 +25,30 @@ jest.mock("../lib/media", () => {
 const fetchMediaMock = fetchMedia as jest.MockedFunction<typeof fetchMedia>;
 const activeClients = new Set<QueryClient>();
 
+const originalScheduler = notifyManager.schedule;
+
+beforeAll(() => {
+    notifyManager.setScheduler((callback) => {
+        callback();
+    });
+});
+
+afterAll(() => {
+    notifyManager.setScheduler(originalScheduler);
+});
+
 function createQueryClient() {
     return new QueryClient({
         defaultOptions: {
             queries: {
                 retry: false,
                 gcTime: 0,
-                cacheTime: 0,
             },
         },
     });
 }
 
-function renderHomeScreen() {
+function renderHomeScreen(options?: Parameters<typeof HomeScreen>[0]) {
     const queryClient = createQueryClient();
     activeClients.add(queryClient);
     const utils = render(
@@ -47,7 +59,7 @@ function renderHomeScreen() {
             }}
         >
             <QueryClientProvider client={queryClient}>
-                <HomeScreen />
+                <HomeScreen {...options} />
             </QueryClientProvider>
         </SafeAreaProvider>
     );
@@ -102,6 +114,15 @@ afterEach(async () => {
 });
 
 describe("HomeScreen UI", () => {
+    it("shows a prompt when no search has been submitted", async () => {
+        const { findByText } = renderHomeScreen({ initialQuery: "" });
+
+        expect(
+            await findByText("Start typing to search OMDb titles.")
+        ).toBeTruthy();
+        expect(fetchMediaMock).not.toHaveBeenCalled();
+    });
+
     it("renders media results with fallback copy when fields are missing", async () => {
         fetchMediaMock.mockResolvedValueOnce(
             createMediaList([

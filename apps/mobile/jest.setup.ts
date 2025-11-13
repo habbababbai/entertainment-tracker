@@ -1,4 +1,5 @@
 import "@testing-library/jest-native/extend-expect";
+import "./lib/i18n";
 import type { ReactNode } from "react";
 
 jest.mock("expo-router", () => ({

@@ -86,6 +86,7 @@ Backend tests use Vitest with globally stubbed environment variables defined in 
 -   Run Expo dev server: `pnpm mobile:dev`
 -   Lint mobile sources: `pnpm mobile:lint`
 -   Type-check mobile code: `pnpm mobile:typecheck`
+-   Run mobile tests: `pnpm --filter @entertainment-tracker/mobile test`
 -   Export web bundle: `pnpm mobile:build`
 
 The backend currently exposes a Fastify instance with CORS/Helmet middleware, Prisma integration, and versioned APIs. Future work will expand domain modules and shared API contracts for the mobile app.
