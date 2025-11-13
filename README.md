@@ -7,13 +7,12 @@ Entertainment Tracker is a pnpm-powered Turborepo that bundles a Node.js backend
 ```
 entertainment-tracker/
 ├─ apps/
-│  ├─ backend/   # Node.js API service (PostgreSQL, feature modules, shared lib)
-│  └─ mobile/    # Expo React Native client
+│  ├─ backend/   # Fastify API service (PostgreSQL, Prisma, OMDb integration)
+│  └─ mobile/    # Expo React Native client (search + detail screens)
 ├─ packages/
-│  ├─ tsconfig/       # Shared TypeScript configs
+│  ├─ contracts/      # Shared Zod schemas consumed by backend & mobile
 │  ├─ eslint-config/  # Shared lint rules
-│  ├─ ui/             # Cross-platform UI primitives (optional)
-│  └─ utils/          # Reusable logic, API contracts, DB typings
+│  └─ tsconfig/       # Shared TypeScript configs
 ├─ turbo.json         # Turborepo pipeline definitions
 ├─ pnpm-workspace.yaml
 └─ package.json
@@ -26,12 +25,6 @@ entertainment-tracker/
 -   **Mobile app:** Expo (React Native)
 -   **Shared tooling:** ESLint, TypeScript,
 
-## Planned Capabilities
-
--   Search and browse media data via a free movie/series API
--   Maintain per-user watchlists across movies, TV series, and anime
--   Track completion state, episode progress, and personal ratings
--   Sync data between the Expo app and backend API
 
 ## Backend (Fastify) Setup
 
@@ -56,8 +49,14 @@ entertainment-tracker/
     pnpm be:dev
     ```
 5. Verify the health check:
+
     ```bash
     curl http://localhost:3000/api/v1/health
+    ```
+
+6. Fetch a sample media item (replace the ID with any valid IMDb id):
+    ```bash
+    curl "http://localhost:3000/api/v1/media/tt0133093"
     ```
 
 ### Handy Database Commands
