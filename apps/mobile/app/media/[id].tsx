@@ -90,44 +90,64 @@ export default function MediaDetailsScreen() {
     });
 
     const { data: watchEntry } = useQuery<WatchEntry | null, Error>({
-        queryKey: ["watchlist-entry", trimmedId],
+        queryKey: ["watchlist-entry", data?.externalId],
         queryFn: async (): Promise<WatchEntry | null> => {
-            if (!isAuthenticated || !trimmedId) {
+            if (!isAuthenticated || !data?.externalId) {
                 return null;
             }
             try {
-                const entry = await fetchWatchlistEntry(trimmedId);
+                const entry = await fetchWatchlistEntry(data.externalId);
                 return entry || null;
             } catch {
                 return null;
             }
         },
-        enabled: isAuthenticated && trimmedId.length > 0,
+        enabled: isAuthenticated && Boolean(data?.externalId),
         retry: false,
         placeholderData: null,
     });
 
     const addToWatchlistMutation = useMutation({
-        mutationFn: () => addToWatchlist({ mediaItemId: trimmedId }),
+        mutationFn: () => {
+            if (!data?.externalId) {
+                throw new Error("Media item external ID not available");
+            }
+            return addToWatchlist({ mediaItemId: data.externalId });
+        },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["watchlist-entry", trimmedId] });
+            if (data?.externalId) {
+                queryClient.invalidateQueries({ queryKey: ["watchlist-entry", data.externalId] });
+            }
             queryClient.invalidateQueries({ queryKey: ["watchlist"] });
         },
     });
 
     const removeFromWatchlistMutation = useMutation({
-        mutationFn: () => removeFromWatchlist(trimmedId),
+        mutationFn: () => {
+            if (!data?.externalId) {
+                throw new Error("Media item external ID not available");
+            }
+            return removeFromWatchlist(data.externalId);
+        },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["watchlist-entry", trimmedId] });
+            if (data?.externalId) {
+                queryClient.invalidateQueries({ queryKey: ["watchlist-entry", data.externalId] });
+            }
             queryClient.invalidateQueries({ queryKey: ["watchlist"] });
         },
     });
 
     const updateRatingMutation = useMutation({
-        mutationFn: (rating: number | null) =>
-            updateWatchlistEntry(trimmedId, { rating }),
+        mutationFn: (rating: number | null) => {
+            if (!data?.externalId) {
+                throw new Error("Media item external ID not available");
+            }
+            return updateWatchlistEntry(data.externalId, { rating });
+        },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["watchlist-entry", trimmedId] });
+            if (data?.externalId) {
+                queryClient.invalidateQueries({ queryKey: ["watchlist-entry", data.externalId] });
+            }
             queryClient.invalidateQueries({ queryKey: ["watchlist"] });
             setShowRatingModal(false);
             setRatingInput("");
@@ -135,12 +155,15 @@ export default function MediaDetailsScreen() {
     });
 
     const handleSaveToggle = useCallback(() => {
+        if (!data?.externalId) {
+            return;
+        }
         if (watchEntry) {
             removeFromWatchlistMutation.mutate();
         } else {
             addToWatchlistMutation.mutate();
         }
-    }, [watchEntry, addToWatchlistMutation, removeFromWatchlistMutation]);
+    }, [watchEntry, addToWatchlistMutation, removeFromWatchlistMutation, data]);
 
     const handleRatingPress = useCallback(() => {
         if (watchEntry?.rating) {
@@ -264,7 +287,7 @@ export default function MediaDetailsScreen() {
                             <TouchableOpacity
                                 accessibilityRole="button"
                                 onPress={handleSaveToggle}
-                                disabled={isLoadingWatchlist || !trimmedId}
+                                disabled={isLoadingWatchlist || !data?.externalId}
                                 style={[
                                     styles.actionButton,
                                     watchEntry && styles.actionButtonActive,

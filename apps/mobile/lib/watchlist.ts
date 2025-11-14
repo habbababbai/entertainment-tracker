@@ -1,3 +1,13 @@
+import {
+    watchEntrySchema,
+    watchlistResponseSchema,
+    addWatchlistRequestSchema,
+    updateWatchlistRequestSchema,
+    type WatchEntry,
+    type WatchlistResponse,
+    type AddWatchlistRequest,
+    type UpdateWatchlistRequest,
+} from "@entertainment-tracker/contracts";
 import { resolveApiBaseUrl } from "./media";
 import { useAuthStore } from "./store/auth";
 
@@ -7,52 +17,13 @@ function getAccessToken(): string | null {
     return useAuthStore.getState().accessToken;
 }
 
-export type WatchStatus =
-    | "PLANNED"
-    | "WATCHING"
-    | "COMPLETED"
-    | "ON_HOLD"
-    | "DROPPED";
-
-export interface WatchEntry {
-    id: string;
-    userId: string;
-    mediaItemId: string;
-    status: WatchStatus;
-    rating: number | null;
-    notes: string | null;
-    lastWatchedAt: string | null;
-    createdAt: string;
-    updatedAt: string;
-    mediaItem: {
-        id: string;
-        externalId: string;
-        source: string;
-        title: string;
-        description: string | null;
-        posterUrl: string | null;
-        backdropUrl: string | null;
-        mediaType: string;
-        totalSeasons: number | null;
-        totalEpisodes: number | null;
-        releaseDate: string | null;
-    };
-}
-
-export interface WatchlistResponse {
-    items: WatchEntry[];
-}
-
-export interface AddWatchlistRequest {
-    mediaItemId: string;
-}
-
-export interface UpdateWatchlistRequest {
-    status?: WatchStatus;
-    rating?: number | null;
-    notes?: string | null;
-    lastWatchedAt?: string | null;
-}
+// Re-export types for convenience
+export type {
+    WatchEntry,
+    WatchlistResponse,
+    AddWatchlistRequest,
+    UpdateWatchlistRequest,
+} from "@entertainment-tracker/contracts";
 
 async function authenticatedFetch<T>(
     path: string,
@@ -127,36 +98,11 @@ async function authenticatedFetch<T>(
 }
 
 function parseWatchEntry(value: unknown): WatchEntry {
-    if (
-        typeof value !== "object" ||
-        value === null ||
-        typeof (value as { id?: unknown }).id !== "string" ||
-        typeof (value as { userId?: unknown }).userId !== "string" ||
-        typeof (value as { mediaItemId?: unknown }).mediaItemId !== "string" ||
-        typeof (value as { status?: unknown }).status !== "string" ||
-        typeof (value as { createdAt?: unknown }).createdAt !== "string" ||
-        typeof (value as { updatedAt?: unknown }).updatedAt !== "string" ||
-        typeof (value as { mediaItem?: unknown }).mediaItem !== "object" ||
-        (value as { mediaItem?: unknown }).mediaItem === null
-    ) {
-        throw new Error("Invalid watch entry structure");
-    }
-
-    const entry = value as WatchEntry;
-    return entry;
+    return watchEntrySchema.parse(value);
 }
 
 function parseWatchlistResponse(value: unknown): WatchlistResponse {
-    if (
-        typeof value !== "object" ||
-        value === null ||
-        !Array.isArray((value as { items?: unknown }).items)
-    ) {
-        throw new Error("Invalid watchlist response structure");
-    }
-
-    const items = (value as { items: unknown[] }).items.map(parseWatchEntry);
-    return { items };
+    return watchlistResponseSchema.parse(value);
 }
 
 export async function fetchWatchlist(): Promise<WatchlistResponse> {
@@ -196,11 +142,15 @@ export async function addToWatchlist(
         throw new Error("Media item ID cannot be empty.");
     }
 
+    const validatedRequest = addWatchlistRequestSchema.parse({
+        mediaItemId: trimmedId,
+    });
+
     return authenticatedFetch(
         "/api/v1/watchlist",
         {
             method: "POST",
-            body: JSON.stringify({ mediaItemId: trimmedId }),
+            body: JSON.stringify(validatedRequest),
         },
         parseWatchEntry
     );
@@ -216,11 +166,13 @@ export async function updateWatchlistEntry(
         throw new Error("Media item ID cannot be empty.");
     }
 
+    const validatedRequest = updateWatchlistRequestSchema.parse(request);
+
     return authenticatedFetch(
         `/api/v1/watchlist/${encodeURIComponent(trimmedId)}`,
         {
             method: "PATCH",
-            body: JSON.stringify(request),
+            body: JSON.stringify(validatedRequest),
         },
         parseWatchEntry
     );

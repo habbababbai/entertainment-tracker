@@ -153,9 +153,9 @@ function WatchlistCard({ item }: { item: WatchEntry }) {
     const handlePress = useCallback(() => {
         router.push({
             pathname: "/media/[id]",
-            params: { id: item.mediaItem.id },
+            params: { id: item.mediaItem.externalId },
         });
-    }, [item.mediaItem.id, router]);
+    }, [item.mediaItem.externalId, router]);
 
     const statusLabel = item.status;
     const ratingLabel = item.rating
