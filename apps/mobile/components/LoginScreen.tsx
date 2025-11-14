@@ -1,10 +1,12 @@
 import { useState } from "react";
 import {
     ActivityIndicator,
+    Keyboard,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
+    TouchableWithoutFeedback,
     View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -51,11 +53,12 @@ export default function LoginScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.content}>
-                <Text style={styles.title}>Welcome Back</Text>
-                <Text style={styles.subtitle}>Sign in to continue</Text>
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                <View style={styles.content}>
+                    <Text style={styles.title}>Welcome Back</Text>
+                    <Text style={styles.subtitle}>Sign in to continue</Text>
 
-                <View style={styles.form}>
+                    <View style={styles.form}>
                     <View style={styles.inputContainer}>
                         <Text style={styles.label}>Email</Text>
                         <TextInput
@@ -111,7 +114,8 @@ export default function LoginScreen() {
                         )}
                     </TouchableOpacity>
                 </View>
-            </View>
+                </View>
+            </TouchableWithoutFeedback>
         </SafeAreaView>
     );
 }

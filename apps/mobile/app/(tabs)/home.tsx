@@ -2,11 +2,13 @@ import { useCallback, useMemo, useState } from "react";
 import {
     ActivityIndicator,
     FlatList,
+    Keyboard,
     RefreshControl,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
+    TouchableWithoutFeedback,
     View,
 } from "react-native";
 import { useInfiniteQuery } from "@tanstack/react-query";
@@ -159,10 +161,12 @@ export default function HomeScreen({
 
     return (
         <SafeAreaView style={styles.container}>
-            <Text style={styles.title}>{t("home.title")}</Text>
-            <Text style={styles.subtitle}>{t("home.subtitle")}</Text>
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                <View style={styles.wrapper}>
+                    <Text style={styles.title}>{t("home.title")}</Text>
+                    <Text style={styles.subtitle}>{t("home.subtitle")}</Text>
 
-            <View style={styles.searchBar}>
+                    <View style={styles.searchBar}>
                 <TextInput
                     value={search}
                     onChangeText={setSearch}
@@ -209,6 +213,8 @@ export default function HomeScreen({
                 onEndReached={handleEndReached}
                 onEndReachedThreshold={0.5}
             />
+                </View>
+            </TouchableWithoutFeedback>
         </SafeAreaView>
     );
 }
@@ -277,9 +283,12 @@ function formatDate(
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        backgroundColor: colors.background,
+    },
+    wrapper: {
+        flex: 1,
         paddingHorizontal: scale(24),
         paddingVertical: verticalScale(24),
-        backgroundColor: colors.background,
     },
     title: {
         fontSize: fontSizes.xl,
