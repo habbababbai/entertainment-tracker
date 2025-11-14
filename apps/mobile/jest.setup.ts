@@ -1,4 +1,4 @@
-import "@testing-library/jest-native/extend-expect";
+import "@testing-library/react-native/extend-expect";
 import "./lib/i18n";
 import type { ReactNode } from "react";
 
