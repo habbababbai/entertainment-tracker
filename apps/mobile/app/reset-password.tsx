@@ -96,8 +96,8 @@ export default function ResetPasswordScreen() {
                 <View style={styles.content}>
                     <Text style={styles.title}>Password Reset Successful</Text>
                     <Text style={styles.subtitle}>
-                        Your password has been reset successfully. Redirecting to
-                        settings...
+                        Your password has been reset successfully. Redirecting
+                        to settings...
                     </Text>
                     <ActivityIndicator
                         size="large"
@@ -184,6 +184,7 @@ export default function ResetPasswordScreen() {
                             {isLoading ? (
                                 <ActivityIndicator
                                     color={colors.accentOnAccent}
+                                    testID="reset-password-loading"
                                 />
                             ) : (
                                 <Text style={styles.buttonText}>
@@ -285,4 +286,3 @@ const styles = StyleSheet.create({
         marginTop: verticalScale(24),
     },
 });
-

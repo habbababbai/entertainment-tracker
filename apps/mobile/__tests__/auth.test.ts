@@ -4,6 +4,19 @@ const originalFetch = globalThis.fetch;
 const fetchMock = jest.fn();
 let originalApiUrl: string | undefined;
 
+const mockGetState = jest.fn();
+
+jest.mock("../lib/store/auth", () => {
+    const actual = jest.requireActual("../lib/store/auth");
+    return {
+        ...actual,
+        useAuthStore: {
+            ...actual.useAuthStore,
+            getState: mockGetState,
+        },
+    };
+});
+
 function buildAuthResponse(): AuthResponse {
     return {
         user: {
@@ -20,7 +33,9 @@ function buildAuthResponse(): AuthResponse {
 
 async function loadModule() {
     jest.resetModules();
-    return jest.requireActual<typeof import("../lib/auth")>("../lib/auth");
+    const authModule =
+        jest.requireActual<typeof import("../lib/auth")>("../lib/auth");
+    return authModule;
 }
 
 beforeEach(() => {
@@ -290,22 +305,15 @@ describe("auth helpers", () => {
         });
 
         await expect(
-            __testUtils.postJsonForTests(
-                "/api/v1/auth/register",
-                {},
-                () => {
-                    throw undefined;
-                }
-            )
+            __testUtils.postJsonForTests("/api/v1/auth/register", {}, () => {
+                throw undefined;
+            })
         ).rejects.toThrow("Malformed auth response: Unknown parser error");
     });
 
     it.each([
         [{}, /User payload is missing/],
-        [
-            { user: {}, accessToken: "token" },
-            /Malformed auth response/,
-        ],
+        [{ user: {}, accessToken: "token" }, /Malformed auth response/],
         [
             {
                 user: {
@@ -379,5 +387,211 @@ describe("auth helpers", () => {
             /Logout failed/
         );
     });
-});
 
+    describe("resetPasswordForLoggedInUser", () => {
+        const mockUser = {
+            id: "user-123",
+            email: "user@example.com",
+            username: "user123",
+            createdAt: "2024-01-01T00:00:00.000Z",
+            updatedAt: "2024-01-02T00:00:00.000Z",
+        };
+
+        beforeEach(() => {
+            mockGetState.mockReturnValue({
+                user: mockUser,
+                accessToken: "access-token",
+                refreshToken: "refresh-token",
+                isAuthenticated: true,
+            });
+        });
+
+        afterEach(() => {
+            mockGetState.mockClear();
+        });
+
+        it("resets password for logged-in user using forgot-password and reset-password endpoints", async () => {
+            const { resetPasswordForLoggedInUser } = await loadModule();
+
+            fetchMock
+                .mockResolvedValueOnce({
+                    ok: true,
+                    json: async () => ({
+                        message: "Reset token generated",
+                        resetToken: "reset-token-123",
+                    }),
+                })
+                .mockResolvedValueOnce({
+                    ok: true,
+                    json: async () => ({
+                        success: true,
+                        message: "Password has been reset successfully",
+                    }),
+                });
+
+            const result = await resetPasswordForLoggedInUser("newPassword123");
+
+            expect(result).toEqual({
+                success: true,
+                message: "Password has been reset successfully",
+            });
+
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+
+            const firstCall = fetchMock.mock.calls[0];
+            expect(firstCall[0]).toBe(
+                "https://api.example.test/api/v1/auth/forgot-password"
+            );
+            const firstBody = firstCall[1] as RequestInit;
+            expect(firstBody?.body).toBeDefined();
+            expect(JSON.parse(firstBody.body as string)).toEqual({
+                email: "user@example.com",
+            });
+
+            const secondCall = fetchMock.mock.calls[1];
+            expect(secondCall[0]).toBe(
+                "https://api.example.test/api/v1/auth/reset-password"
+            );
+            const secondBody = secondCall[1] as RequestInit;
+            expect(secondBody?.body).toBeDefined();
+            expect(JSON.parse(secondBody.body as string)).toEqual({
+                resetToken: "reset-token-123",
+                newPassword: "newPassword123",
+            });
+        });
+
+        it("throws error when user is not logged in", async () => {
+            mockGetState.mockReturnValue({
+                user: null,
+                accessToken: null,
+                refreshToken: null,
+                isAuthenticated: false,
+            });
+
+            const { resetPasswordForLoggedInUser } = await loadModule();
+
+            await expect(
+                resetPasswordForLoggedInUser("newPassword123")
+            ).rejects.toThrow("User must be logged in to reset password");
+
+            expect(fetchMock).not.toHaveBeenCalled();
+        });
+
+        it("throws error when forgot-password does not return resetToken", async () => {
+            const { resetPasswordForLoggedInUser } = await loadModule();
+
+            fetchMock.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    message: "Reset token generated",
+                }),
+            });
+
+            await expect(
+                resetPasswordForLoggedInUser("newPassword123")
+            ).rejects.toThrow(
+                "Failed to generate reset token. Please try again."
+            );
+
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+        });
+
+        it("surfaces errors from forgot-password endpoint", async () => {
+            const { resetPasswordForLoggedInUser } = await loadModule();
+
+            fetchMock.mockResolvedValueOnce({
+                ok: false,
+                status: 500,
+                headers: {
+                    get: (name: string) => {
+                        if (name === "content-type") {
+                            return "application/json";
+                        }
+                        return null;
+                    },
+                },
+                json: async () => ({
+                    statusCode: 500,
+                    error: "Internal Server Error",
+                    message: "Database error",
+                }),
+            });
+
+            await expect(
+                resetPasswordForLoggedInUser("newPassword123")
+            ).rejects.toThrow("Database error");
+        });
+
+        it("surfaces errors from reset-password endpoint", async () => {
+            const { resetPasswordForLoggedInUser } = await loadModule();
+
+            fetchMock
+                .mockResolvedValueOnce({
+                    ok: true,
+                    json: async () => ({
+                        message: "Reset token generated",
+                        resetToken: "reset-token-123",
+                    }),
+                })
+                .mockResolvedValueOnce({
+                    ok: false,
+                    status: 400,
+                    headers: {
+                        get: (name: string) => {
+                            if (name === "content-type") {
+                                return "application/json";
+                            }
+                            return null;
+                        },
+                    },
+                    json: async () => ({
+                        statusCode: 400,
+                        error: "Bad Request",
+                        message: "Reset token has expired",
+                    }),
+                });
+
+            await expect(
+                resetPasswordForLoggedInUser("newPassword123")
+            ).rejects.toThrow("Reset token has expired");
+        });
+
+        it("rejects when forgot-password response is not valid JSON", async () => {
+            const { resetPasswordForLoggedInUser } = await loadModule();
+
+            fetchMock.mockResolvedValueOnce({
+                ok: true,
+                json: async () => {
+                    throw new Error("bad json");
+                },
+            });
+
+            await expect(
+                resetPasswordForLoggedInUser("newPassword123")
+            ).rejects.toThrow("Response payload is not valid JSON.");
+        });
+
+        it("rejects when reset-password response is not valid JSON", async () => {
+            const { resetPasswordForLoggedInUser } = await loadModule();
+
+            fetchMock
+                .mockResolvedValueOnce({
+                    ok: true,
+                    json: async () => ({
+                        message: "Reset token generated",
+                        resetToken: "reset-token-123",
+                    }),
+                })
+                .mockResolvedValueOnce({
+                    ok: true,
+                    json: async () => {
+                        throw new Error("bad json");
+                    },
+                });
+
+            await expect(
+                resetPasswordForLoggedInUser("newPassword123")
+            ).rejects.toThrow("Response payload is not valid JSON.");
+        });
+    });
+});
