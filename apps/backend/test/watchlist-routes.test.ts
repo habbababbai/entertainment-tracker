@@ -8,6 +8,7 @@ import {
     issueTokenPair,
     verifyAccessToken,
 } from "../src/lib/auth/tokens.js";
+import * as omdbModule from "../src/lib/omdb/index.js";
 
 type MockedMediaItem = {
     id: string;
@@ -54,6 +55,7 @@ type PrismaMock = {
 describe("watchlistRoutes", () => {
     let app: FastifyInstance;
     let prisma: PrismaMock;
+    let requestOmdbSpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(async () => {
         prisma = {
@@ -68,6 +70,16 @@ describe("watchlistRoutes", () => {
                 delete: vi.fn(),
             },
         };
+
+        // Mock OMDb requests to fail for non-existent items
+        requestOmdbSpy = vi.spyOn(omdbModule, "requestOmdb").mockImplementation(
+            async () => {
+                return {
+                    Response: "False",
+                    Error: "Movie not found!",
+                } as never;
+            }
+        );
 
         app = Fastify({ logger: false });
         app.decorate("prisma", prisma as unknown as PrismaClient);
@@ -116,7 +128,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
-            prisma.mediaItem.findUnique.mockResolvedValueOnce(mediaItem);
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(null);
             prisma.watchEntry.create.mockResolvedValueOnce({
                 id: "entry-1",
@@ -173,7 +185,8 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
-            prisma.mediaItem.findUnique.mockResolvedValueOnce(null);
+            // Mock not finding by internal ID or external ID
+            prisma.mediaItem.findUnique.mockResolvedValue(null);
 
             const response = await app.inject({
                 method: "POST",
@@ -207,7 +220,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
-            prisma.mediaItem.findUnique.mockResolvedValueOnce(mediaItem);
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(existingEntry);
 
             const response = await app.inject({
@@ -271,6 +284,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(watchEntry);
             prisma.watchEntry.delete.mockResolvedValueOnce(watchEntry);
 
@@ -310,6 +324,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(null);
 
             const response = await app.inject({
@@ -541,6 +556,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(watchEntry);
             prisma.watchEntry.update.mockResolvedValueOnce({
                 ...watchEntry,
@@ -595,6 +611,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(watchEntry);
             prisma.watchEntry.update.mockResolvedValueOnce({
                 ...watchEntry,
@@ -635,6 +652,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(watchEntry);
             prisma.watchEntry.update.mockResolvedValueOnce({
                 ...watchEntry,
@@ -678,6 +696,7 @@ describe("watchlistRoutes", () => {
             });
 
             const lastWatched = new Date("2024-01-15T00:00:00.000Z");
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(watchEntry);
             prisma.watchEntry.update.mockResolvedValueOnce({
                 ...watchEntry,
@@ -726,6 +745,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(watchEntry);
 
             const response = await app.inject({
@@ -763,6 +783,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(watchEntry);
 
             const response = await app.inject({
@@ -787,6 +808,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(null);
 
             const response = await app.inject({
@@ -842,6 +864,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(watchEntry);
 
             const response = await app.inject({
@@ -876,6 +899,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(null);
 
             const response = await app.inject({
@@ -961,5 +985,22 @@ function buildWatchEntry(
     };
 
     return { ...base, ...overrides };
+}
+
+function mockMediaItemFindUnique(
+    prismaMock: PrismaMock,
+    mediaItem: MockedMediaItem
+) {
+    prismaMock.mediaItem.findUnique.mockImplementation((args: {
+        where: { id?: string; externalId?: string };
+    }) => {
+        if (args.where.id === mediaItem.id) {
+            return Promise.resolve(mediaItem);
+        }
+        if (args.where.externalId === mediaItem.externalId) {
+            return Promise.resolve(mediaItem);
+        }
+        return Promise.resolve(null);
+    });
 }
 

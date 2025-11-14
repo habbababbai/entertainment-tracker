@@ -80,7 +80,7 @@ jest.mock("expo-router", () => {
             back: mockBack,
         }),
         useLocalSearchParams: jest.fn(() => ({
-            id: "media-123",
+            id: "tt1234567",
         })),
     };
 });
@@ -214,7 +214,7 @@ afterEach(async () => {
     updateWatchlistEntryMock.mockReset();
     mockBack.mockReset();
     mockUseLocalSearchParams.mockReset();
-    mockUseLocalSearchParams.mockReturnValue({ id: "media-123" });
+    mockUseLocalSearchParams.mockReturnValue({ id: "tt1234567" });
     useAuthStoreMock.mockReset();
     useAuthStoreMock.mockImplementation((selector: any) => {
         if (typeof selector === "function") {
@@ -452,7 +452,7 @@ describe("MediaDetailsScreen", () => {
 
             await waitFor(() => {
                 expect(addToWatchlistMock).toHaveBeenCalledWith({
-                    mediaItemId: "media-123",
+                    mediaItemId: "tt1234567",
                 });
             });
 
@@ -476,7 +476,7 @@ describe("MediaDetailsScreen", () => {
             });
 
             await waitFor(() => {
-                expect(removeFromWatchlistMock).toHaveBeenCalledWith("media-123");
+                expect(removeFromWatchlistMock).toHaveBeenCalledWith("tt1234567");
             });
 
             expect(queryClient.getQueryCache().findAll().length).toBeGreaterThanOrEqual(1);
@@ -598,7 +598,7 @@ describe("MediaDetailsScreen", () => {
 
             await waitFor(() => {
                 expect(updateWatchlistEntryMock).toHaveBeenCalledWith(
-                    "media-123",
+                    "tt1234567",
                     { rating: 9 }
                 );
             });
@@ -689,7 +689,7 @@ describe("MediaDetailsScreen", () => {
 
             await waitFor(() => {
                 expect(updateWatchlistEntryMock).toHaveBeenCalledWith(
-                    "media-123",
+                    "tt1234567",
                     { rating: null }
                 );
             });

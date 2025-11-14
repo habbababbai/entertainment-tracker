@@ -336,7 +336,7 @@ describe("SavedScreen UI", () => {
 
         expect(mockPush).toHaveBeenCalledWith({
             pathname: "/media/[id]",
-            params: { id: "media-123" },
+            params: { id: "tt0000001" },
         });
     });
 

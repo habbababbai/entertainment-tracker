@@ -452,7 +452,7 @@ describe("watchlist helpers", () => {
             });
 
             await expect(fetchWatchlist()).rejects.toThrow(
-                "Invalid watchlist response structure"
+                "Malformed response"
             );
         });
 
@@ -465,7 +465,7 @@ describe("watchlist helpers", () => {
             });
 
             await expect(fetchWatchlistEntry("media-123")).rejects.toThrow(
-                "Invalid watch entry structure"
+                "Malformed response"
             );
         });
 
