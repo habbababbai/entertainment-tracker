@@ -1,13 +1,20 @@
 import { type User } from "@prisma/client";
-import {
-    type FastifyInstance,
-    type FastifyPluginAsync,
-} from "fastify";
+import { type FastifyInstance, type FastifyPluginAsync } from "fastify";
 
 import { hashPassword, verifyPassword } from "../../lib/auth/password.js";
+import {
+    createResetTokenExpiration,
+    generateResetToken,
+    isResetTokenExpired,
+} from "../../lib/auth/reset-token.js";
 import { issueTokenPair, verifyRefreshToken } from "../../lib/auth/tokens.js";
 import { type SerializedUser } from "../../lib/auth/types.js";
-import { conflict, unauthorized } from "../../lib/http-errors.js";
+import {
+    badRequest,
+    conflict,
+    notFound,
+    unauthorized,
+} from "../../lib/http-errors.js";
 
 const authResponseSchema = {
     type: "object",
@@ -64,6 +71,20 @@ interface LoginBody {
 
 interface TokenBody {
     refreshToken: string;
+}
+
+interface ForgotPasswordBody {
+    email: string;
+}
+
+interface ResetPasswordBody {
+    resetToken: string;
+    newPassword: string;
+}
+
+interface DeleteAccountBody {
+    password: string;
+    email: string;
 }
 
 interface AuthResponse {
@@ -238,6 +259,221 @@ export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
             return reply.send({ success: true });
         }
     );
+
+    app.post(
+        "/auth/forgot-password",
+        {
+            schema: {
+                body: {
+                    type: "object",
+                    properties: {
+                        email: { type: "string", format: "email" },
+                    },
+                    required: ["email"],
+                    additionalProperties: false,
+                },
+                response: {
+                    200: {
+                        type: "object",
+                        properties: {
+                            message: { type: "string" },
+                            resetToken: { type: "string" },
+                        },
+                        required: ["message"],
+                    },
+                    404: errorResponseSchema,
+                },
+            },
+        },
+        async (request, reply) => {
+            const { email } = request.body as ForgotPasswordBody;
+
+            const user = await app.prisma.user.findUnique({
+                where: { email },
+            });
+
+            if (user) {
+                const resetToken = generateResetToken();
+                const expiresAt = createResetTokenExpiration();
+
+                await app.prisma.user.update({
+                    where: { id: user.id },
+                    data: {
+                        passwordResetToken: resetToken,
+                        passwordResetTokenExpiresAt: expiresAt,
+                    },
+                });
+
+                return reply.send({
+                    message:
+                        "If an account with that email exists, a password reset token has been generated.",
+                    resetToken,
+                });
+            }
+
+            return reply.send({
+                message:
+                    "If an account with that email exists, a password reset token has been generated.",
+            });
+        }
+    );
+
+    app.post(
+        "/auth/reset-password",
+        {
+            schema: {
+                body: {
+                    type: "object",
+                    properties: {
+                        resetToken: { type: "string", minLength: 1 },
+                        newPassword: {
+                            type: "string",
+                            minLength: 8,
+                            description:
+                                "Password must be at least 8 characters long",
+                        },
+                    },
+                    required: ["resetToken", "newPassword"],
+                    additionalProperties: false,
+                },
+                response: {
+                    200: {
+                        type: "object",
+                        properties: {
+                            success: { type: "boolean" },
+                            message: { type: "string" },
+                        },
+                        required: ["success", "message"],
+                    },
+                    400: errorResponseSchema,
+                    404: errorResponseSchema,
+                },
+            },
+        },
+        async (request, reply) => {
+            const { resetToken, newPassword } =
+                request.body as ResetPasswordBody;
+
+            const user = await app.prisma.user.findFirst({
+                where: {
+                    passwordResetToken: resetToken,
+                },
+            });
+
+            if (!user) {
+                throw notFound("Invalid or expired reset token");
+            }
+
+            if (
+                !user.passwordResetTokenExpiresAt ||
+                isResetTokenExpired(user.passwordResetTokenExpiresAt)
+            ) {
+                await app.prisma.user.update({
+                    where: { id: user.id },
+                    data: {
+                        passwordResetToken: null,
+                        passwordResetTokenExpiresAt: null,
+                    },
+                });
+                throw badRequest("Reset token has expired");
+            }
+
+            const newPasswordHash = await hashPassword(newPassword);
+
+            await app.prisma.user.update({
+                where: { id: user.id },
+                data: {
+                    passwordHash: newPasswordHash,
+                    passwordResetToken: null,
+                    passwordResetTokenExpiresAt: null,
+                    tokenVersion: {
+                        increment: 1,
+                    },
+                },
+            });
+
+            return reply.send({
+                success: true,
+                message: "Password has been reset successfully",
+            });
+        }
+    );
+
+    app.delete(
+        "/auth/account",
+        {
+            onRequest: [app.authenticate],
+            schema: {
+                headers: {
+                    type: "object",
+                    properties: {
+                        authorization: {
+                            type: "string",
+                            pattern: "^Bearer .+",
+                        },
+                    },
+                    required: ["authorization"],
+                },
+                body: {
+                    type: "object",
+                    properties: {
+                        password: { type: "string", minLength: 1 },
+                        email: { type: "string", format: "email" },
+                    },
+                    required: ["password", "email"],
+                    additionalProperties: false,
+                },
+                response: {
+                    200: {
+                        type: "object",
+                        properties: {
+                            success: { type: "boolean" },
+                            message: { type: "string" },
+                        },
+                        required: ["success", "message"],
+                    },
+                    401: errorResponseSchema,
+                },
+            },
+        },
+        async (request, reply) => {
+            const { password, email } = request.body as DeleteAccountBody;
+
+            const user = await app.prisma.user.findUnique({
+                where: { id: request.user.id },
+            });
+
+            if (!user) {
+                throw unauthorized("User not found");
+            }
+
+            if (user.tokenVersion !== request.user.tokenVersion) {
+                throw unauthorized("Invalid or expired access token");
+            }
+
+            const passwordValid = await verifyPassword(
+                password,
+                user.passwordHash
+            );
+
+            if (!passwordValid) {
+                throw unauthorized("Invalid password");
+            }
+
+            if (user.email !== email) {
+                throw unauthorized("Email does not match");
+            }
+
+            await app.prisma.user.delete({
+                where: { id: user.id },
+            });
+
+            return reply.send({
+                success: true,
+                message: "Account has been deleted successfully",
+            });
+        }
+    );
 };
 
 function buildAuthResponse(
@@ -291,4 +527,3 @@ async function getUserForRefreshToken(
 
     return user;
 }
-
