@@ -14,6 +14,12 @@ export default function TabsLayout() {
                 }}
             />
             <Tabs.Screen
+                name="saved"
+                options={{
+                    title: "Saved",
+                }}
+            />
+            <Tabs.Screen
                 name="settings"
                 options={{
                     title: "Settings",

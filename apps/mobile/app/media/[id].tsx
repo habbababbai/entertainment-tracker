@@ -1,20 +1,30 @@
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
     ActivityIndicator,
     Image,
+    Modal,
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
 } from "react-native";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 
 import { fetchMediaItem, type MediaItem } from "../../lib/media";
+import {
+    addToWatchlist,
+    fetchWatchlistEntry,
+    removeFromWatchlist,
+    updateWatchlistEntry,
+    type WatchEntry,
+} from "../../lib/watchlist";
+import { useAuthStore } from "../../lib/store/auth";
 import { colors } from "../../lib/theme/colors";
 import { fontSizes, fontWeights } from "../../lib/theme/fonts";
 import "../../lib/i18n";
@@ -49,6 +59,11 @@ export default function MediaDetailsScreen() {
     const router = useRouter();
     const params = useLocalSearchParams<{ id?: string | string[] }>();
     const { t } = useTranslation();
+    const queryClient = useQueryClient();
+    const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
+    const [showRatingModal, setShowRatingModal] = useState(false);
+    const [ratingInput, setRatingInput] = useState("");
 
     const mediaId = useMemo(() => {
         if (Array.isArray(params.id)) {
@@ -67,6 +82,86 @@ export default function MediaDetailsScreen() {
         enabled: trimmedId.length > 0,
         retry: false,
     });
+
+    const { data: watchEntry } = useQuery<WatchEntry | null, Error>({
+        queryKey: ["watchlist-entry", trimmedId],
+        queryFn: async () => {
+            if (!isAuthenticated || !trimmedId) return null;
+            try {
+                return await fetchWatchlistEntry(trimmedId);
+            } catch {
+                return null;
+            }
+        },
+        enabled: isAuthenticated && trimmedId.length > 0,
+        retry: false,
+    });
+
+    const addToWatchlistMutation = useMutation({
+        mutationFn: () => addToWatchlist({ mediaItemId: trimmedId }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["watchlist-entry", trimmedId] });
+            queryClient.invalidateQueries({ queryKey: ["watchlist"] });
+        },
+    });
+
+    const removeFromWatchlistMutation = useMutation({
+        mutationFn: () => removeFromWatchlist(trimmedId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["watchlist-entry", trimmedId] });
+            queryClient.invalidateQueries({ queryKey: ["watchlist"] });
+        },
+    });
+
+    const updateRatingMutation = useMutation({
+        mutationFn: (rating: number | null) =>
+            updateWatchlistEntry(trimmedId, { rating }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["watchlist-entry", trimmedId] });
+            queryClient.invalidateQueries({ queryKey: ["watchlist"] });
+            setShowRatingModal(false);
+            setRatingInput("");
+        },
+    });
+
+    const handleSaveToggle = useCallback(() => {
+        if (watchEntry) {
+            removeFromWatchlistMutation.mutate();
+        } else {
+            addToWatchlistMutation.mutate();
+        }
+    }, [watchEntry, addToWatchlistMutation, removeFromWatchlistMutation]);
+
+    const handleRatingPress = useCallback(() => {
+        if (watchEntry?.rating) {
+            setRatingInput(String(watchEntry.rating));
+        } else {
+            setRatingInput("");
+        }
+        setShowRatingModal(true);
+    }, [watchEntry]);
+
+    const handleRatingSubmit = useCallback(() => {
+        const rating = parseInt(ratingInput.trim(), 10);
+        if (isNaN(rating) || rating < 1 || rating > 10) {
+            return;
+        }
+        updateRatingMutation.mutate(rating);
+    }, [ratingInput, updateRatingMutation]);
+
+    const handleRatingRemove = useCallback(() => {
+        updateRatingMutation.mutate(null, {
+            onSuccess: () => {
+                setShowRatingModal(false);
+                setRatingInput("");
+            },
+        });
+    }, [updateRatingMutation]);
+
+    const isLoadingWatchlist =
+        addToWatchlistMutation.isPending ||
+        removeFromWatchlistMutation.isPending ||
+        updateRatingMutation.isPending;
 
     const fallback = t("common.notAvailable");
     const releaseLabel = formatDate(data?.releaseDate, fallback);
@@ -130,50 +225,197 @@ export default function MediaDetailsScreen() {
         }
 
         return (
-            <ScrollView
-                contentContainerStyle={styles.contentContainer}
-                showsVerticalScrollIndicator={false}
-            >
-                <View style={styles.header}>
-                    <Text style={styles.title}>{data.title}</Text>
-                    <Text style={styles.badge}>{data.mediaType}</Text>
-                </View>
-                {data.posterUrl ? (
-                    <Image
-                        accessibilityLabel={`${data.title} poster`}
-                        source={{ uri: data.posterUrl }}
-                        style={styles.poster}
-                    />
-                ) : (
-                    <View style={styles.posterPlaceholder}>
-                        <Text style={styles.posterPlaceholderText}>
-                            {t("details.posterFallback")}
+            <>
+                <ScrollView
+                    contentContainerStyle={styles.contentContainer}
+                    showsVerticalScrollIndicator={false}
+                >
+                    <View style={styles.header}>
+                        <Text style={styles.title}>{data.title}</Text>
+                        <View style={styles.badge}>
+                            <Text style={styles.badgeText}>{data.mediaType}</Text>
+                        </View>
+                    </View>
+                    {data.posterUrl ? (
+                        <Image
+                            accessibilityLabel={`${data.title} poster`}
+                            source={{ uri: data.posterUrl }}
+                            style={styles.poster}
+                        />
+                    ) : (
+                        <View style={styles.posterPlaceholder}>
+                            <Text style={styles.posterPlaceholderText}>
+                                {t("details.posterFallback")}
+                            </Text>
+                        </View>
+                    )}
+                    {isAuthenticated && (
+                        <View style={styles.actionsContainer}>
+                            <TouchableOpacity
+                                accessibilityRole="button"
+                                onPress={handleSaveToggle}
+                                disabled={isLoadingWatchlist || !trimmedId}
+                                style={[
+                                    styles.actionButton,
+                                    watchEntry && styles.actionButtonActive,
+                                    isLoadingWatchlist && styles.actionButtonDisabled,
+                                ]}
+                                activeOpacity={0.8}
+                            >
+                                {isLoadingWatchlist ? (
+                                    <ActivityIndicator
+                                        size="small"
+                                        color={
+                                            watchEntry
+                                                ? colors.accentOnAccent
+                                                : colors.textPrimary
+                                        }
+                                    />
+                                ) : (
+                                    <Text
+                                        style={[
+                                            styles.actionButtonText,
+                                            watchEntry && styles.actionButtonTextActive,
+                                        ]}
+                                    >
+                                        {watchEntry
+                                            ? t("details.removeFromWatchlist")
+                                            : t("details.addToWatchlist")}
+                                    </Text>
+                                )}
+                            </TouchableOpacity>
+                            {watchEntry && (
+                                <TouchableOpacity
+                                    accessibilityRole="button"
+                                    onPress={handleRatingPress}
+                                    disabled={isLoadingWatchlist}
+                                    style={[
+                                        styles.actionButton,
+                                        styles.ratingButton,
+                                        isLoadingWatchlist && styles.actionButtonDisabled,
+                                    ]}
+                                    activeOpacity={0.8}
+                                >
+                                    <Text style={styles.actionButtonText}>
+                                        {watchEntry.rating
+                                            ? t("details.ratingWithValue", {
+                                                  rating: watchEntry.rating,
+                                              })
+                                            : t("details.addRating")}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    )}
+                    <Text style={styles.metadata}>
+                        {t("details.metadata", {
+                            source: data.source,
+                            mediaType: data.mediaType,
+                            seasons: seasonsLabel,
+                            episodes: episodesLabel,
+                        })}
+                    </Text>
+                    <Text style={styles.metaLine}>
+                        {t("details.releaseDate", { value: releaseLabel })}
+                    </Text>
+                    <Text style={styles.metaLine}>
+                        {t("details.updatedAt", { value: updatedLabel })}
+                    </Text>
+                    <View style={styles.section}>
+                        <Text style={styles.sectionHeading}>
+                            {t("details.descriptionHeading")}
+                        </Text>
+                        <Text style={styles.sectionBody}>
+                            {data.description ?? t("home.emptyDescription")}
                         </Text>
                     </View>
-                )}
-                <Text style={styles.metadata}>
-                    {t("details.metadata", {
-                        source: data.source,
-                        mediaType: data.mediaType,
-                        seasons: seasonsLabel,
-                        episodes: episodesLabel,
-                    })}
-                </Text>
-                <Text style={styles.metaLine}>
-                    {t("details.releaseDate", { value: releaseLabel })}
-                </Text>
-                <Text style={styles.metaLine}>
-                    {t("details.updatedAt", { value: updatedLabel })}
-                </Text>
-                <View style={styles.section}>
-                    <Text style={styles.sectionHeading}>
-                        {t("details.descriptionHeading")}
-                    </Text>
-                    <Text style={styles.sectionBody}>
-                        {data.description ?? t("home.emptyDescription")}
-                    </Text>
-                </View>
-            </ScrollView>
+                </ScrollView>
+                <Modal
+                    visible={showRatingModal}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={() => setShowRatingModal(false)}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContent}>
+                            <Text style={styles.modalTitle}>
+                                {t("details.ratingModalTitle")}
+                            </Text>
+                            <TextInput
+                                value={ratingInput}
+                                onChangeText={setRatingInput}
+                                placeholder={t("details.ratingPlaceholder")}
+                                keyboardType="numeric"
+                                maxLength={2}
+                                style={styles.ratingInput}
+                                autoFocus
+                            />
+                            <Text style={styles.ratingHint}>
+                                {t("details.ratingHint")}
+                            </Text>
+                            <View style={styles.modalButtons}>
+                                {watchEntry?.rating && (
+                                    <TouchableOpacity
+                                        onPress={handleRatingRemove}
+                                        disabled={updateRatingMutation.isPending}
+                                        style={[
+                                            styles.modalButton,
+                                            styles.modalButtonRemove,
+                                        ]}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Text style={styles.modalButtonRemoveText}>
+                                            {t("details.removeRating")}
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+                                <TouchableOpacity
+                                    onPress={handleRatingSubmit}
+                                    disabled={
+                                        updateRatingMutation.isPending ||
+                                        !ratingInput.trim()
+                                    }
+                                    style={[
+                                        styles.modalButton,
+                                        styles.modalButtonPrimary,
+                                        (!ratingInput.trim() ||
+                                            updateRatingMutation.isPending) &&
+                                            styles.modalButtonDisabled,
+                                    ]}
+                                    activeOpacity={0.8}
+                                >
+                                    {updateRatingMutation.isPending ? (
+                                        <ActivityIndicator
+                                            size="small"
+                                            color={colors.accentOnAccent}
+                                        />
+                                    ) : (
+                                        <Text style={styles.modalButtonPrimaryText}>
+                                            {t("details.saveRating")}
+                                        </Text>
+                                    )}
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        setShowRatingModal(false);
+                                        setRatingInput("");
+                                    }}
+                                    disabled={updateRatingMutation.isPending}
+                                    style={[
+                                        styles.modalButton,
+                                        styles.modalButtonCancel,
+                                    ]}
+                                    activeOpacity={0.8}
+                                >
+                                    <Text style={styles.modalButtonCancelText}>
+                                        {t("common.cancel")}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </View>
+                </Modal>
+            </>
         );
     })();
 
@@ -259,12 +501,125 @@ const styles = StyleSheet.create({
     },
     badge: {
         backgroundColor: colors.accent,
-        color: colors.accentOnAccent,
         paddingHorizontal: scale(12),
         paddingVertical: verticalScale(4),
         borderRadius: moderateScale(999),
+    },
+    badgeText: {
+        color: colors.accentOnAccent,
         fontSize: fontSizes.xs,
         fontWeight: fontWeights.semiBold,
+    },
+    actionsContainer: {
+        flexDirection: "row",
+        gap: scale(12),
+        marginBottom: verticalScale(8),
+    },
+    actionButton: {
+        flex: 1,
+        paddingVertical: verticalScale(12),
+        paddingHorizontal: scale(16),
+        borderRadius: moderateScale(10),
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.border,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    actionButtonActive: {
+        backgroundColor: colors.accent,
+        borderColor: colors.accent,
+    },
+    actionButtonDisabled: {
+        opacity: 0.6,
+    },
+    actionButtonText: {
+        fontSize: fontSizes.sm,
+        fontWeight: fontWeights.semiBold,
+        color: colors.textPrimary,
+    },
+    actionButtonTextActive: {
+        color: colors.accentOnAccent,
+    },
+    ratingButton: {
+        flex: 0,
+        paddingHorizontal: scale(12),
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        justifyContent: "center",
+        alignItems: "center",
+        padding: scale(20),
+    },
+    modalContent: {
+        backgroundColor: colors.surface,
+        borderRadius: moderateScale(16),
+        padding: scale(24),
+        width: "100%",
+        maxWidth: scale(400),
+        gap: verticalScale(16),
+    },
+    modalTitle: {
+        fontSize: fontSizes.lg,
+        fontWeight: fontWeights.semiBold,
+        color: colors.textPrimary,
+        textAlign: "center",
+    },
+    ratingInput: {
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: moderateScale(10),
+        paddingHorizontal: scale(16),
+        paddingVertical: verticalScale(12),
+        fontSize: fontSizes.md,
+        backgroundColor: colors.background,
+        color: colors.textPrimary,
+        textAlign: "center",
+    },
+    ratingHint: {
+        fontSize: fontSizes.sm,
+        color: colors.textSecondary,
+        textAlign: "center",
+    },
+    modalButtons: {
+        gap: verticalScale(8),
+    },
+    modalButton: {
+        paddingVertical: verticalScale(12),
+        paddingHorizontal: scale(16),
+        borderRadius: moderateScale(10),
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    modalButtonPrimary: {
+        backgroundColor: colors.accent,
+    },
+    modalButtonPrimaryText: {
+        color: colors.accentOnAccent,
+        fontSize: fontSizes.md,
+        fontWeight: fontWeights.semiBold,
+    },
+    modalButtonRemove: {
+        backgroundColor: colors.error,
+    },
+    modalButtonRemoveText: {
+        color: colors.accentOnAccent,
+        fontSize: fontSizes.md,
+        fontWeight: fontWeights.semiBold,
+    },
+    modalButtonCancel: {
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    modalButtonCancelText: {
+        color: colors.textPrimary,
+        fontSize: fontSizes.md,
+        fontWeight: fontWeights.medium,
+    },
+    modalButtonDisabled: {
+        opacity: 0.6,
     },
     metadata: {
         fontSize: fontSizes.sm,
