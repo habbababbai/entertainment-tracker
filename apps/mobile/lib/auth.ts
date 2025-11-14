@@ -26,13 +26,34 @@ async function postJson<T>(
     if (!response.ok) {
         let message: string | undefined;
         try {
-            message = await response.text();
+            const contentType = response.headers.get("content-type");
+            if (contentType?.includes("application/json")) {
+                const errorData = await response.json();
+                if (
+                    typeof errorData === "object" &&
+                    errorData !== null &&
+                    "message" in errorData &&
+                    typeof errorData.message === "string"
+                ) {
+                    message = errorData.message;
+                } else if (
+                    typeof errorData === "object" &&
+                    errorData !== null &&
+                    "error" in errorData &&
+                    typeof errorData.error === "string"
+                ) {
+                    message = errorData.error;
+                }
+            } else {
+                const text = await response.text();
+                message = text.trim() || undefined;
+            }
         } catch {
             message = undefined;
         }
 
         throw new Error(
-            message?.trim() || `Request failed with status ${response.status}`
+            message || `Request failed with status ${response.status}`
         );
     }
 

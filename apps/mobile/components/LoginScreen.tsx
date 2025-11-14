@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
+import { useRouter } from "expo-router";
 
 import { loginUser } from "../lib/auth";
 import { useAuthStore } from "../lib/store/auth";
@@ -23,6 +24,7 @@ export default function LoginScreen() {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const router = useRouter();
     const setAuthFromResponse = useAuthStore(
         (state) => state.setAuthFromResponse
     );
@@ -113,6 +115,13 @@ export default function LoginScreen() {
                             <Text style={styles.buttonText}>Sign In</Text>
                         )}
                     </TouchableOpacity>
+
+                    <View style={styles.footer}>
+                        <Text style={styles.footerText}>Don't have an account? </Text>
+                        <TouchableOpacity onPress={() => router.push("/register")} activeOpacity={0.8}>
+                            <Text style={styles.linkText}>Sign Up</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
                 </View>
             </TouchableWithoutFeedback>
@@ -189,6 +198,21 @@ const styles = StyleSheet.create({
     buttonText: {
         color: colors.accentOnAccent,
         fontSize: fontSizes.md,
+        fontWeight: fontWeights.semiBold,
+    },
+    footer: {
+        flexDirection: "row",
+        justifyContent: "center",
+        alignItems: "center",
+        marginTop: verticalScale(16),
+    },
+    footerText: {
+        fontSize: fontSizes.sm,
+        color: colors.textSecondary,
+    },
+    linkText: {
+        fontSize: fontSizes.sm,
+        color: colors.accent,
         fontWeight: fontWeights.semiBold,
     },
 });
