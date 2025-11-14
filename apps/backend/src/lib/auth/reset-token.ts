@@ -11,10 +11,8 @@ export function isResetTokenExpired(expiresAt: Date | null): boolean {
     return new Date() > expiresAt;
 }
 
-
 export function createResetTokenExpiration(hoursFromNow = 1): Date {
     const expiration = new Date();
     expiration.setHours(expiration.getHours() + hoursFromNow);
     return expiration;
 }
-
