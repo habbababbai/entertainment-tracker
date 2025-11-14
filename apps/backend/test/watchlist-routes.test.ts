@@ -1,0 +1,572 @@
+import type { PrismaClient } from "@prisma/client";
+import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { watchlistRoutes } from "../src/routes/v1/watchlist.js";
+import { unauthorized } from "../src/lib/http-errors.js";
+import {
+    issueTokenPair,
+    verifyAccessToken,
+} from "../src/lib/auth/tokens.js";
+
+type MockedMediaItem = {
+    id: string;
+    externalId: string;
+    source: string;
+    title: string;
+    description: string | null;
+    posterUrl: string | null;
+    backdropUrl: string | null;
+    mediaType: string;
+    totalSeasons: number | null;
+    totalEpisodes: number | null;
+    releaseDate: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+};
+
+type MockedWatchEntry = {
+    id: string;
+    userId: string;
+    mediaItemId: string;
+    status: string;
+    rating: number | null;
+    notes: string | null;
+    lastWatchedAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+    mediaItem?: MockedMediaItem;
+};
+
+type PrismaMock = {
+    mediaItem: {
+        findUnique: ReturnType<typeof vi.fn>;
+    };
+    watchEntry: {
+        create: ReturnType<typeof vi.fn>;
+        findUnique: ReturnType<typeof vi.fn>;
+        findMany: ReturnType<typeof vi.fn>;
+        delete: ReturnType<typeof vi.fn>;
+    };
+};
+
+describe("watchlistRoutes", () => {
+    let app: FastifyInstance;
+    let prisma: PrismaMock;
+
+    beforeEach(async () => {
+        prisma = {
+            mediaItem: {
+                findUnique: vi.fn(),
+            },
+            watchEntry: {
+                create: vi.fn(),
+                findUnique: vi.fn(),
+                findMany: vi.fn(),
+                delete: vi.fn(),
+            },
+        };
+
+        app = Fastify({ logger: false });
+        app.decorate("prisma", prisma as unknown as PrismaClient);
+
+        app.decorate("authenticate", async (request: FastifyRequest) => {
+            const authorization = request.headers.authorization;
+            if (!authorization?.startsWith("Bearer ")) {
+                throw unauthorized("Missing or invalid Authorization header");
+            }
+            const token = authorization.slice("Bearer ".length).trim();
+            try {
+                const payload = verifyAccessToken(token);
+                (
+                    request as FastifyRequest & {
+                        user: { id: string; tokenVersion: number };
+                    }
+                ).user = {
+                    id: payload.sub,
+                    tokenVersion: payload.tokenVersion,
+                };
+            } catch {
+                throw unauthorized("Invalid or expired access token");
+            }
+        });
+
+        await app.register(watchlistRoutes);
+        await app.ready();
+    });
+
+    afterEach(async () => {
+        await app.close();
+        vi.restoreAllMocks();
+    });
+
+    describe("POST /watchlist", () => {
+        it("adds media item to watchlist", async () => {
+            const user = buildUser({ id: "user-1" });
+            const mediaItem = buildMediaItem({
+                id: "media-1",
+                externalId: "tt0000001",
+                title: "Test Movie",
+            });
+
+            const { accessToken } = issueTokenPair({
+                id: user.id,
+                tokenVersion: user.tokenVersion,
+            });
+
+            prisma.mediaItem.findUnique.mockResolvedValueOnce(mediaItem);
+            prisma.watchEntry.findUnique.mockResolvedValueOnce(null);
+            prisma.watchEntry.create.mockResolvedValueOnce({
+                id: "entry-1",
+                userId: user.id,
+                mediaItemId: mediaItem.id,
+                status: "PLANNED",
+                rating: null,
+                notes: null,
+                lastWatchedAt: null,
+                createdAt: new Date("2024-01-01T00:00:00.000Z"),
+                updatedAt: new Date("2024-01-01T00:00:00.000Z"),
+                mediaItem,
+            });
+
+            const response = await app.inject({
+                method: "POST",
+                url: "/watchlist",
+                headers: {
+                    authorization: `Bearer ${accessToken}`,
+                },
+                payload: {
+                    mediaItemId: mediaItem.id,
+                },
+            });
+
+            expect(response.statusCode).toBe(201);
+            const payload = response.json() as MockedWatchEntry;
+
+            expect(payload.id).toBe("entry-1");
+            expect(payload.userId).toBe(user.id);
+            expect(payload.mediaItemId).toBe(mediaItem.id);
+            expect(payload.status).toBe("PLANNED");
+            expect(payload.mediaItem).toMatchObject({
+                id: mediaItem.id,
+                title: "Test Movie",
+            });
+
+            expect(prisma.watchEntry.create).toHaveBeenCalledWith({
+                data: {
+                    userId: user.id,
+                    mediaItemId: mediaItem.id,
+                    status: "PLANNED",
+                },
+                include: {
+                    mediaItem: true,
+                },
+            });
+        });
+
+        it("rejects adding item when media item does not exist", async () => {
+            const user = buildUser({ id: "user-1" });
+            const { accessToken } = issueTokenPair({
+                id: user.id,
+                tokenVersion: user.tokenVersion,
+            });
+
+            prisma.mediaItem.findUnique.mockResolvedValueOnce(null);
+
+            const response = await app.inject({
+                method: "POST",
+                url: "/watchlist",
+                headers: {
+                    authorization: `Bearer ${accessToken}`,
+                },
+                payload: {
+                    mediaItemId: "non-existent-id",
+                },
+            });
+
+            expect(response.statusCode).toBe(404);
+            const payload = response.json() as {
+                message: string;
+            };
+            expect(payload.message).toBe("Media item not found");
+        });
+
+        it("rejects adding item that is already in watchlist", async () => {
+            const user = buildUser({ id: "user-1" });
+            const mediaItem = buildMediaItem({ id: "media-1" });
+            const existingEntry = buildWatchEntry({
+                id: "entry-1",
+                userId: user.id,
+                mediaItemId: mediaItem.id,
+            });
+
+            const { accessToken } = issueTokenPair({
+                id: user.id,
+                tokenVersion: user.tokenVersion,
+            });
+
+            prisma.mediaItem.findUnique.mockResolvedValueOnce(mediaItem);
+            prisma.watchEntry.findUnique.mockResolvedValueOnce(existingEntry);
+
+            const response = await app.inject({
+                method: "POST",
+                url: "/watchlist",
+                headers: {
+                    authorization: `Bearer ${accessToken}`,
+                },
+                payload: {
+                    mediaItemId: mediaItem.id,
+                },
+            });
+
+            expect(response.statusCode).toBe(409);
+            const payload = response.json() as {
+                message: string;
+            };
+            expect(payload.message).toBe("Item already in watchlist");
+        });
+
+        it("rejects request without authorization", async () => {
+            const response = await app.inject({
+                method: "POST",
+                url: "/watchlist",
+                payload: {
+                    mediaItemId: "media-1",
+                },
+            });
+
+            expect(response.statusCode).toBe(401);
+        });
+
+        it("rejects request with invalid token", async () => {
+            const response = await app.inject({
+                method: "POST",
+                url: "/watchlist",
+                headers: {
+                    authorization: "Bearer invalid-token",
+                },
+                payload: {
+                    mediaItemId: "media-1",
+                },
+            });
+
+            expect(response.statusCode).toBe(401);
+        });
+    });
+
+    describe("DELETE /watchlist/:mediaItemId", () => {
+        it("removes item from watchlist", async () => {
+            const user = buildUser({ id: "user-1" });
+            const mediaItem = buildMediaItem({ id: "media-1" });
+            const watchEntry = buildWatchEntry({
+                id: "entry-1",
+                userId: user.id,
+                mediaItemId: mediaItem.id,
+            });
+
+            const { accessToken } = issueTokenPair({
+                id: user.id,
+                tokenVersion: user.tokenVersion,
+            });
+
+            prisma.watchEntry.findUnique.mockResolvedValueOnce(watchEntry);
+            prisma.watchEntry.delete.mockResolvedValueOnce(watchEntry);
+
+            const response = await app.inject({
+                method: "DELETE",
+                url: `/watchlist/${mediaItem.id}`,
+                headers: {
+                    authorization: `Bearer ${accessToken}`,
+                },
+            });
+
+            expect(response.statusCode).toBe(200);
+            const payload = response.json() as {
+                success: boolean;
+                message: string;
+            };
+
+            expect(payload.success).toBe(true);
+            expect(payload.message).toBe("Item removed from watchlist");
+
+            expect(prisma.watchEntry.delete).toHaveBeenCalledWith({
+                where: {
+                    userId_mediaItemId: {
+                        userId: user.id,
+                        mediaItemId: mediaItem.id,
+                    },
+                },
+            });
+        });
+
+        it("rejects deletion when item is not in watchlist", async () => {
+            const user = buildUser({ id: "user-1" });
+            const mediaItem = buildMediaItem({ id: "media-1" });
+
+            const { accessToken } = issueTokenPair({
+                id: user.id,
+                tokenVersion: user.tokenVersion,
+            });
+
+            prisma.watchEntry.findUnique.mockResolvedValueOnce(null);
+
+            const response = await app.inject({
+                method: "DELETE",
+                url: `/watchlist/${mediaItem.id}`,
+                headers: {
+                    authorization: `Bearer ${accessToken}`,
+                },
+            });
+
+            expect(response.statusCode).toBe(404);
+            const payload = response.json() as {
+                message: string;
+            };
+            expect(payload.message).toBe("Item not found in watchlist");
+        });
+
+        it("rejects deletion without authorization", async () => {
+            const response = await app.inject({
+                method: "DELETE",
+                url: "/watchlist/media-1",
+            });
+
+            expect(response.statusCode).toBe(401);
+        });
+
+        it("rejects deletion with invalid token", async () => {
+            const response = await app.inject({
+                method: "DELETE",
+                url: "/watchlist/media-1",
+                headers: {
+                    authorization: "Bearer invalid-token",
+                },
+            });
+
+            expect(response.statusCode).toBe(401);
+        });
+    });
+
+    describe("GET /watchlist", () => {
+        it("returns user's watchlist items", async () => {
+            const user = buildUser({ id: "user-1" });
+            const mediaItem1 = buildMediaItem({
+                id: "media-1",
+                title: "Movie 1",
+            });
+            const mediaItem2 = buildMediaItem({
+                id: "media-2",
+                title: "Movie 2",
+            });
+
+            const watchEntry1 = buildWatchEntry({
+                id: "entry-1",
+                userId: user.id,
+                mediaItemId: mediaItem1.id,
+                mediaItem: mediaItem1,
+            });
+
+            const watchEntry2 = buildWatchEntry({
+                id: "entry-2",
+                userId: user.id,
+                mediaItemId: mediaItem2.id,
+                mediaItem: mediaItem2,
+            });
+
+            const { accessToken } = issueTokenPair({
+                id: user.id,
+                tokenVersion: user.tokenVersion,
+            });
+
+            prisma.watchEntry.findMany.mockResolvedValueOnce([
+                watchEntry1,
+                watchEntry2,
+            ]);
+
+            const response = await app.inject({
+                method: "GET",
+                url: "/watchlist",
+                headers: {
+                    authorization: `Bearer ${accessToken}`,
+                },
+            });
+
+            expect(response.statusCode).toBe(200);
+            const payload = response.json() as {
+                items: MockedWatchEntry[];
+            };
+
+            expect(payload.items).toHaveLength(2);
+            expect(payload.items[0]).toMatchObject({
+                id: "entry-1",
+                userId: user.id,
+                mediaItemId: mediaItem1.id,
+                mediaItem: {
+                    id: mediaItem1.id,
+                    title: "Movie 1",
+                },
+            });
+            expect(payload.items[1]).toMatchObject({
+                id: "entry-2",
+                userId: user.id,
+                mediaItemId: mediaItem2.id,
+            });
+
+            expect(prisma.watchEntry.findMany).toHaveBeenCalledWith({
+                where: {
+                    userId: user.id,
+                },
+                include: {
+                    mediaItem: true,
+                },
+                orderBy: {
+                    createdAt: "desc",
+                },
+            });
+        });
+
+        it("returns empty array when user has no watchlist items", async () => {
+            const user = buildUser({ id: "user-1" });
+
+            const { accessToken } = issueTokenPair({
+                id: user.id,
+                tokenVersion: user.tokenVersion,
+            });
+
+            prisma.watchEntry.findMany.mockResolvedValueOnce([]);
+
+            const response = await app.inject({
+                method: "GET",
+                url: "/watchlist",
+                headers: {
+                    authorization: `Bearer ${accessToken}`,
+                },
+            });
+
+            expect(response.statusCode).toBe(200);
+            const payload = response.json() as {
+                items: MockedWatchEntry[];
+            };
+
+            expect(payload.items).toHaveLength(0);
+        });
+
+        it("rejects request without authorization", async () => {
+            const response = await app.inject({
+                method: "GET",
+                url: "/watchlist",
+            });
+
+            expect(response.statusCode).toBe(401);
+        });
+
+        it("rejects request with invalid token", async () => {
+            const response = await app.inject({
+                method: "GET",
+                url: "/watchlist",
+                headers: {
+                    authorization: "Bearer invalid-token",
+                },
+            });
+
+            expect(response.statusCode).toBe(401);
+        });
+
+        it("only returns watchlist items for authenticated user", async () => {
+            const user1 = buildUser({ id: "user-1" });
+            const user2 = buildUser({ id: "user-2" });
+            const mediaItem = buildMediaItem({ id: "media-1" });
+
+            const user1Entry = buildWatchEntry({
+                id: "entry-1",
+                userId: user1.id,
+                mediaItemId: mediaItem.id,
+                mediaItem,
+            });
+
+            const { accessToken } = issueTokenPair({
+                id: user1.id,
+                tokenVersion: user1.tokenVersion,
+            });
+
+            prisma.watchEntry.findMany.mockResolvedValueOnce([user1Entry]);
+
+            const response = await app.inject({
+                method: "GET",
+                url: "/watchlist",
+                headers: {
+                    authorization: `Bearer ${accessToken}`,
+                },
+            });
+
+            expect(response.statusCode).toBe(200);
+            const payload = response.json() as {
+                items: MockedWatchEntry[];
+            };
+
+            expect(payload.items).toHaveLength(1);
+            expect(payload.items[0].userId).toBe(user1.id);
+            expect(payload.items[0].userId).not.toBe(user2.id);
+
+            expect(prisma.watchEntry.findMany).toHaveBeenCalledWith({
+                where: {
+                    userId: user1.id,
+                },
+                include: {
+                    mediaItem: true,
+                },
+                orderBy: {
+                    createdAt: "desc",
+                },
+            });
+        });
+    });
+});
+
+function buildUser(overrides: { id: string; tokenVersion?: number }) {
+    return {
+        id: overrides.id,
+        tokenVersion: overrides.tokenVersion ?? 0,
+    };
+}
+
+function buildMediaItem(
+    overrides: Partial<MockedMediaItem>
+): MockedMediaItem {
+    const base: MockedMediaItem = {
+        id: "media-id",
+        externalId: "tt0000001",
+        source: "omdb",
+        title: "Test Movie",
+        description: "Test description",
+        posterUrl: "https://example.com/poster.jpg",
+        backdropUrl: "https://example.com/backdrop.jpg",
+        mediaType: "MOVIE",
+        totalSeasons: null,
+        totalEpisodes: null,
+        releaseDate: new Date("2024-01-01T00:00:00.000Z"),
+        createdAt: new Date("2024-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2024-01-01T00:00:00.000Z"),
+    };
+
+    return { ...base, ...overrides };
+}
+
+function buildWatchEntry(
+    overrides: Partial<MockedWatchEntry>
+): MockedWatchEntry {
+    const base: MockedWatchEntry = {
+        id: "entry-id",
+        userId: "user-id",
+        mediaItemId: "media-id",
+        status: "PLANNED",
+        rating: null,
+        notes: null,
+        lastWatchedAt: null,
+        createdAt: new Date("2024-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2024-01-01T00:00:00.000Z"),
+    };
+
+    return { ...base, ...overrides };
+}
+
