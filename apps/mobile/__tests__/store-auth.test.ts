@@ -376,6 +376,149 @@ describe("useAuthStore", () => {
         }
     );
 
+    (isNativePlatform ? it : it.skip)(
+        "loadTokens loads tokens when user exists",
+        async () => {
+            mockGetItem.mockReset();
+            mockGetItem.mockImplementation((key: string) => {
+                if (key === "auth-access-token") {
+                    return Promise.resolve(mockTokens.accessToken);
+                }
+                if (key === "auth-refresh-token") {
+                    return Promise.resolve(mockTokens.refreshToken);
+                }
+                return Promise.resolve(null);
+            });
+
+            const { result } = renderHook(() => useAuthStore());
+
+            act(() => {
+                useAuthStore.setState({
+                    user: mockUser,
+                    accessToken: null,
+                    refreshToken: null,
+                    isAuthenticated: false,
+                });
+            });
+
+            await act(async () => {
+                await result.current.loadTokens();
+            });
+
+            expect(result.current.accessToken).toBe(mockTokens.accessToken);
+            expect(result.current.refreshToken).toBe(mockTokens.refreshToken);
+            expect(result.current.isAuthenticated).toBe(true);
+        }
+    );
+
+    (isNativePlatform ? it : it.skip)(
+        "loadTokens clears tokens when tokens don't exist",
+        async () => {
+            const { result } = renderHook(() => useAuthStore());
+
+            await act(async () => {
+                await result.current.setAuth(mockUser, mockTokens);
+            });
+
+            mockGetItem.mockResolvedValue(null);
+
+            await act(async () => {
+                await result.current.loadTokens();
+            });
+
+            expect(result.current.accessToken).toBeNull();
+            expect(result.current.refreshToken).toBeNull();
+            expect(result.current.isAuthenticated).toBe(false);
+        }
+    );
+
+    (isNativePlatform ? it : it.skip)(
+        "loadTokens clears tokens when only access token exists",
+        async () => {
+            const { result } = renderHook(() => useAuthStore());
+
+            await act(async () => {
+                await result.current.setAuth(mockUser, mockTokens);
+            });
+
+            mockGetItem.mockImplementation((key: string) => {
+                if (key === "auth-access-token") {
+                    return Promise.resolve(mockTokens.accessToken);
+                }
+                return Promise.resolve(null);
+            });
+
+            await act(async () => {
+                await result.current.loadTokens();
+            });
+
+            expect(result.current.accessToken).toBeNull();
+            expect(result.current.refreshToken).toBeNull();
+            expect(result.current.isAuthenticated).toBe(false);
+        }
+    );
+
+    (isNativePlatform ? it : it.skip)(
+        "loadTokens clears tokens when only refresh token exists",
+        async () => {
+            const { result } = renderHook(() => useAuthStore());
+
+            await act(async () => {
+                await result.current.setAuth(mockUser, mockTokens);
+            });
+
+            mockGetItem.mockImplementation((key: string) => {
+                if (key === "auth-refresh-token") {
+                    return Promise.resolve(mockTokens.refreshToken);
+                }
+                return Promise.resolve(null);
+            });
+
+            await act(async () => {
+                await result.current.loadTokens();
+            });
+
+            expect(result.current.accessToken).toBeNull();
+            expect(result.current.refreshToken).toBeNull();
+            expect(result.current.isAuthenticated).toBe(false);
+        }
+    );
+
+    (isNativePlatform ? it : it.skip)(
+        "loadTokens does not update state when tokens exist but user is null",
+        async () => {
+            const { result } = renderHook(() => useAuthStore());
+
+            act(() => {
+                useAuthStore.setState({
+                    user: null,
+                    accessToken: null,
+                    refreshToken: null,
+                    isAuthenticated: false,
+                });
+            });
+
+            mockGetItem.mockImplementation((key: string) => {
+                if (key === "auth-access-token") {
+                    return Promise.resolve(mockTokens.accessToken);
+                }
+                if (key === "auth-refresh-token") {
+                    return Promise.resolve(mockTokens.refreshToken);
+                }
+                return Promise.resolve(null);
+            });
+
+            await act(async () => {
+                await result.current.loadTokens();
+            });
+
+            expect(result.current.user).toBeNull();
+            expect(result.current.accessToken).toBeNull();
+            expect(result.current.refreshToken).toBeNull();
+            expect(result.current.isAuthenticated).toBe(false);
+        }
+    );
+
     describe("error logging in development", () => {
         let originalDev: boolean | undefined;
 
