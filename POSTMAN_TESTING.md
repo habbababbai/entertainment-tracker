@@ -277,7 +277,7 @@ Authorization: Bearer PASTE_ACCESS_TOKEN_HERE
 
 ## Troubleshooting
 
-1. **Server not running**: Make sure backend is running with `npm run dev` in `apps/backend`
+1. **Server not running**: Make sure backend is running with `pnpm run dev` in `apps/backend`
 2. **Port conflict**: Check if port 3000 is available, or update `.env` file
 3. **Invalid token**: Tokens expire. Login again to get fresh tokens
 4. **Database errors**: Ensure database is running and migrations are applied
