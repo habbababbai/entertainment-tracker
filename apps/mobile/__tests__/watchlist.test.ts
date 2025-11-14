@@ -116,7 +116,6 @@ describe("watchlist helpers", () => {
             expect(options?.headers).toMatchObject({
                 Authorization: "Bearer test-access-token",
             });
-            // GET requests without body should not have Content-Type
             expect(options?.headers).not.toHaveProperty("Content-Type");
         });
 
@@ -190,7 +189,6 @@ describe("watchlist helpers", () => {
             expect(requestedUrl).toBe(
                 "https://api.example.test/api/v1/watchlist/media-123"
             );
-            // GET requests without body should not have Content-Type
             expect(options?.headers).toMatchObject({
                 Authorization: "Bearer test-access-token",
             });
@@ -252,7 +250,6 @@ describe("watchlist helpers", () => {
             expect(options?.body).toBe(
                 JSON.stringify({ mediaItemId: "media-123" })
             );
-            // POST requests with body should have Content-Type
             expect(options?.headers).toMatchObject({
                 "Content-Type": "application/json",
                 Authorization: "Bearer test-access-token",
@@ -315,7 +312,6 @@ describe("watchlist helpers", () => {
             );
             expect(options?.method).toBe("PATCH");
             expect(options?.body).toBe(JSON.stringify({ status: "WATCHING" }));
-            // PATCH requests with body should have Content-Type
             expect(options?.headers).toMatchObject({
                 "Content-Type": "application/json",
                 Authorization: "Bearer test-access-token",
@@ -421,7 +417,6 @@ describe("watchlist helpers", () => {
                 "https://api.example.test/api/v1/watchlist/media-123"
             );
             expect(options?.method).toBe("DELETE");
-            // DELETE requests without body should not have Content-Type
             expect(options?.headers).toMatchObject({
                 Authorization: "Bearer test-access-token",
             });

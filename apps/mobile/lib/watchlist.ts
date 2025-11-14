@@ -38,7 +38,6 @@ async function authenticatedFetch<T>(
 
     const url = new URL(path, API_BASE_URL);
 
-    // Only set Content-Type if there's a body
     const hasBody = options.body !== undefined && options.body !== null;
     const headers: Record<string, string> = {
         Authorization: `Bearer ${accessToken}`,

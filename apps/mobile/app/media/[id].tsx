@@ -129,7 +129,6 @@ export default function MediaDetailsScreen() {
             );
         },
         onSuccess: ({ result, externalId }) => {
-            // Update the cache directly with the new watchlist entry
             queryClient.setQueryData(["watchlist-entry", externalId], result);
             queryClient.invalidateQueries({ queryKey: ["watchlist"] });
         },
@@ -148,7 +147,6 @@ export default function MediaDetailsScreen() {
             return idToRemove;
         },
         onSuccess: (removedExternalId) => {
-            // Remove the entry from cache
             queryClient.setQueryData(
                 ["watchlist-entry", removedExternalId],
                 null
@@ -173,7 +171,6 @@ export default function MediaDetailsScreen() {
             );
         },
         onSuccess: ({ result, externalId }) => {
-            // Update the cache directly with the updated watchlist entry
             queryClient.setQueryData(["watchlist-entry", externalId], result);
             queryClient.invalidateQueries({ queryKey: ["watchlist"] });
             setShowRatingModal(false);
