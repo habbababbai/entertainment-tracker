@@ -8,6 +8,7 @@ import {
     issueTokenPair,
     verifyAccessToken,
 } from "../src/lib/auth/tokens.js";
+import * as omdbModule from "../src/lib/omdb/index.js";
 
 type MockedMediaItem = {
     id: string;
@@ -41,6 +42,7 @@ type MockedWatchEntry = {
 type PrismaMock = {
     mediaItem: {
         findUnique: ReturnType<typeof vi.fn>;
+        upsert: ReturnType<typeof vi.fn>;
     };
     watchEntry: {
         create: ReturnType<typeof vi.fn>;
@@ -54,11 +56,13 @@ type PrismaMock = {
 describe("watchlistRoutes", () => {
     let app: FastifyInstance;
     let prisma: PrismaMock;
+    let requestOmdbSpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(async () => {
         prisma = {
             mediaItem: {
                 findUnique: vi.fn(),
+                upsert: vi.fn(),
             },
             watchEntry: {
                 create: vi.fn(),
@@ -68,6 +72,15 @@ describe("watchlistRoutes", () => {
                 delete: vi.fn(),
             },
         };
+
+        requestOmdbSpy = vi.spyOn(omdbModule, "requestOmdb").mockImplementation(
+            async () => {
+                return {
+                    Response: "False",
+                    Error: "Movie not found!",
+                } as never;
+            }
+        );
 
         app = Fastify({ logger: false });
         app.decorate("prisma", prisma as unknown as PrismaClient);
@@ -116,7 +129,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
-            prisma.mediaItem.findUnique.mockResolvedValueOnce(mediaItem);
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(null);
             prisma.watchEntry.create.mockResolvedValueOnce({
                 id: "entry-1",
@@ -173,7 +186,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
-            prisma.mediaItem.findUnique.mockResolvedValueOnce(null);
+            prisma.mediaItem.findUnique.mockResolvedValue(null);
 
             const response = await app.inject({
                 method: "POST",
@@ -207,7 +220,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
-            prisma.mediaItem.findUnique.mockResolvedValueOnce(mediaItem);
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(existingEntry);
 
             const response = await app.inject({
@@ -254,6 +267,362 @@ describe("watchlistRoutes", () => {
 
             expect(response.statusCode).toBe(401);
         });
+
+        it("creates media item from OMDb when not in database", async () => {
+            const user = buildUser({ id: "user-1" });
+            const externalId = "tt1234567";
+            const omdbResponse = {
+                Response: "True",
+                imdbID: externalId,
+                Title: "New Movie",
+                Type: "movie",
+                Plot: "A new movie plot",
+                Poster: "https://example.com/poster.jpg",
+                Year: "2024",
+                Released: "2024-01-15",
+            };
+
+            const { accessToken } = issueTokenPair({
+                id: user.id,
+                tokenVersion: user.tokenVersion,
+            });
+
+            prisma.mediaItem.findUnique.mockResolvedValue(null);
+
+            requestOmdbSpy.mockResolvedValueOnce(omdbResponse as never);
+
+            const createdMediaItem = buildMediaItem({
+                id: "new-media-id",
+                externalId,
+                title: "New Movie",
+                description: "A new movie plot",
+                posterUrl: "https://example.com/poster.jpg",
+                releaseDate: new Date("2024-01-15T00:00:00.000Z"),
+            });
+            prisma.mediaItem.upsert = vi.fn().mockResolvedValue(createdMediaItem);
+
+            prisma.watchEntry.findUnique.mockResolvedValueOnce(null);
+            prisma.watchEntry.create.mockResolvedValueOnce({
+                id: "entry-1",
+                userId: user.id,
+                mediaItemId: createdMediaItem.id,
+                status: "PLANNED",
+                rating: null,
+                notes: null,
+                lastWatchedAt: null,
+                createdAt: new Date("2024-01-01T00:00:00.000Z"),
+                updatedAt: new Date("2024-01-01T00:00:00.000Z"),
+                mediaItem: createdMediaItem,
+            });
+
+            const response = await app.inject({
+                method: "POST",
+                url: "/watchlist",
+                headers: {
+                    authorization: `Bearer ${accessToken}`,
+                },
+                payload: {
+                    mediaItemId: externalId,
+                },
+            });
+
+            expect(response.statusCode).toBe(201);
+            expect(prisma.mediaItem.upsert).toHaveBeenCalled();
+        });
+
+        it("updates existing media item from OMDb when externalId matches", async () => {
+            const user = buildUser({ id: "user-1" });
+            const externalId = "tt1234567";
+            const existingMediaItem = buildMediaItem({
+                id: "existing-media-id",
+                externalId,
+                title: "Old Title",
+            });
+            const omdbResponse = {
+                Response: "True",
+                imdbID: externalId,
+                Title: "Updated Movie",
+                Type: "movie",
+                Plot: "Updated plot",
+                Poster: "https://example.com/new-poster.jpg",
+                Year: "2024",
+                Released: "2024-01-20",
+            };
+
+            const { accessToken } = issueTokenPair({
+                id: user.id,
+                tokenVersion: user.tokenVersion,
+            });
+
+            prisma.mediaItem.findUnique.mockResolvedValue(null);
+
+            requestOmdbSpy.mockResolvedValueOnce(omdbResponse as never);
+
+            const updatedMediaItem = buildMediaItem({
+                id: existingMediaItem.id,
+                externalId,
+                title: "Updated Movie",
+                description: "Updated plot",
+                posterUrl: "https://example.com/new-poster.jpg",
+                releaseDate: new Date("2024-01-20T00:00:00.000Z"),
+            });
+            prisma.mediaItem.upsert = vi.fn().mockResolvedValue(updatedMediaItem);
+
+            prisma.watchEntry.findUnique.mockResolvedValueOnce(null);
+            prisma.watchEntry.create.mockResolvedValueOnce({
+                id: "entry-1",
+                userId: user.id,
+                mediaItemId: updatedMediaItem.id,
+                status: "PLANNED",
+                rating: null,
+                notes: null,
+                lastWatchedAt: null,
+                createdAt: new Date("2024-01-01T00:00:00.000Z"),
+                updatedAt: new Date("2024-01-01T00:00:00.000Z"),
+                mediaItem: updatedMediaItem,
+            });
+
+            const response = await app.inject({
+                method: "POST",
+                url: "/watchlist",
+                headers: {
+                    authorization: `Bearer ${accessToken}`,
+                },
+                payload: {
+                    mediaItemId: externalId,
+                },
+            });
+
+            expect(response.statusCode).toBe(201);
+            expect(prisma.mediaItem.upsert).toHaveBeenCalled();
+        });
+
+        it("handles OMDb error other than movie not found", async () => {
+            const user = buildUser({ id: "user-1" });
+            const externalId = "tt1234567";
+
+            const { accessToken } = issueTokenPair({
+                id: user.id,
+                tokenVersion: user.tokenVersion,
+            });
+
+            prisma.mediaItem.findUnique.mockResolvedValue(null);
+
+            requestOmdbSpy.mockResolvedValueOnce({
+                Response: "False",
+                Error: "API key invalid",
+            } as never);
+
+            const response = await app.inject({
+                method: "POST",
+                url: "/watchlist",
+                headers: {
+                    authorization: `Bearer ${accessToken}`,
+                },
+                payload: {
+                    mediaItemId: externalId,
+                },
+            });
+
+            expect(response.statusCode).toBe(500);
+            const payload = response.json() as {
+                message: string;
+            };
+            expect(payload.message).toBe("API key invalid");
+        });
+
+        it("handles OMDb error with undefined error message", async () => {
+            const user = buildUser({ id: "user-1" });
+            const externalId = "tt1234567";
+
+            const { accessToken } = issueTokenPair({
+                id: user.id,
+                tokenVersion: user.tokenVersion,
+            });
+
+            prisma.mediaItem.findUnique.mockResolvedValue(null);
+
+            requestOmdbSpy.mockResolvedValueOnce({
+                Response: "False",
+                Error: undefined,
+            } as never);
+
+            const response = await app.inject({
+                method: "POST",
+                url: "/watchlist",
+                headers: {
+                    authorization: `Bearer ${accessToken}`,
+                },
+                payload: {
+                    mediaItemId: externalId,
+                },
+            });
+
+            expect(response.statusCode).toBe(500);
+            const payload = response.json() as {
+                message: string;
+            };
+            expect(payload.message).toBe("Unknown OMDb detail error");
+        });
+
+        it("handles OMDb response with null mapped result", async () => {
+            const user = buildUser({ id: "user-1" });
+            const externalId = "tt1234567";
+
+            const { accessToken } = issueTokenPair({
+                id: user.id,
+                tokenVersion: user.tokenVersion,
+            });
+
+            prisma.mediaItem.findUnique.mockResolvedValue(null);
+
+            requestOmdbSpy.mockResolvedValueOnce({
+                Response: "True",
+                imdbID: externalId,
+                Title: "Movie",
+            } as never);
+
+            const omdbModule = await import("../src/lib/omdb/index.js");
+            const mapOmdbDetailSpy = vi
+                .spyOn(omdbModule, "mapOmdbDetail")
+                .mockReturnValue(null);
+
+            const response = await app.inject({
+                method: "POST",
+                url: "/watchlist",
+                headers: {
+                    authorization: `Bearer ${accessToken}`,
+                },
+                payload: {
+                    mediaItemId: externalId,
+                },
+            });
+
+            expect(response.statusCode).toBe(404);
+            const payload = response.json() as {
+                message: string;
+            };
+            expect(payload.message).toBe("Media item not found");
+
+            mapOmdbDetailSpy.mockRestore();
+        });
+
+        it("finds media item by externalId when not found by internal ID", async () => {
+            const user = buildUser({ id: "user-1" });
+            const mediaItem = buildMediaItem({
+                id: "media-1",
+                externalId: "tt1234567",
+            });
+
+            const { accessToken } = issueTokenPair({
+                id: user.id,
+                tokenVersion: user.tokenVersion,
+            });
+
+            prisma.mediaItem.findUnique.mockImplementation((args: {
+                where: { id?: string; externalId?: string };
+            }) => {
+                if (args.where.id === "tt1234567") {
+                    return Promise.resolve(null);
+                }
+                if (args.where.externalId === "tt1234567") {
+                    return Promise.resolve(mediaItem);
+                }
+                return Promise.resolve(null);
+            });
+
+            prisma.watchEntry.findUnique.mockResolvedValueOnce(null);
+            prisma.watchEntry.create.mockResolvedValueOnce({
+                id: "entry-1",
+                userId: user.id,
+                mediaItemId: mediaItem.id,
+                status: "PLANNED",
+                rating: null,
+                notes: null,
+                lastWatchedAt: null,
+                createdAt: new Date("2024-01-01T00:00:00.000Z"),
+                updatedAt: new Date("2024-01-01T00:00:00.000Z"),
+                mediaItem,
+            });
+
+            const response = await app.inject({
+                method: "POST",
+                url: "/watchlist",
+                headers: {
+                    authorization: `Bearer ${accessToken}`,
+                },
+                payload: {
+                    mediaItemId: "tt1234567",
+                },
+            });
+
+            expect(response.statusCode).toBe(201);
+        });
+
+        it("handles media item with null releaseDate from OMDb", async () => {
+            const user = buildUser({ id: "user-1" });
+            const externalId = "tt1234567";
+            const omdbResponse = {
+                Response: "True",
+                imdbID: externalId,
+                Title: "Movie Without Release Date",
+                Type: "movie",
+                Plot: "A movie",
+                Poster: "N/A",
+                Year: "N/A",
+                Released: "N/A",
+            };
+
+            const { accessToken } = issueTokenPair({
+                id: user.id,
+                tokenVersion: user.tokenVersion,
+            });
+
+            prisma.mediaItem.findUnique.mockResolvedValue(null);
+            requestOmdbSpy.mockResolvedValueOnce(omdbResponse as never);
+
+            const createdMediaItem = buildMediaItem({
+                id: "new-media-id",
+                externalId,
+                title: "Movie Without Release Date",
+                releaseDate: null,
+            });
+            prisma.mediaItem.upsert = vi.fn().mockResolvedValue(createdMediaItem);
+
+            prisma.watchEntry.findUnique.mockResolvedValueOnce(null);
+            prisma.watchEntry.create.mockResolvedValueOnce({
+                id: "entry-1",
+                userId: user.id,
+                mediaItemId: createdMediaItem.id,
+                status: "PLANNED",
+                rating: null,
+                notes: null,
+                lastWatchedAt: null,
+                createdAt: new Date("2024-01-01T00:00:00.000Z"),
+                updatedAt: new Date("2024-01-01T00:00:00.000Z"),
+                mediaItem: createdMediaItem,
+            });
+
+            const response = await app.inject({
+                method: "POST",
+                url: "/watchlist",
+                headers: {
+                    authorization: `Bearer ${accessToken}`,
+                },
+                payload: {
+                    mediaItemId: externalId,
+                },
+            });
+
+            expect(response.statusCode).toBe(201);
+            expect(prisma.mediaItem.upsert).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    create: expect.objectContaining({
+                        releaseDate: null,
+                    }),
+                })
+            );
+        });
     });
 
     describe("DELETE /watchlist/:mediaItemId", () => {
@@ -271,6 +640,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(watchEntry);
             prisma.watchEntry.delete.mockResolvedValueOnce(watchEntry);
 
@@ -310,6 +680,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(null);
 
             const response = await app.inject({
@@ -541,6 +912,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(watchEntry);
             prisma.watchEntry.update.mockResolvedValueOnce({
                 ...watchEntry,
@@ -595,6 +967,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(watchEntry);
             prisma.watchEntry.update.mockResolvedValueOnce({
                 ...watchEntry,
@@ -635,6 +1008,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(watchEntry);
             prisma.watchEntry.update.mockResolvedValueOnce({
                 ...watchEntry,
@@ -678,6 +1052,7 @@ describe("watchlistRoutes", () => {
             });
 
             const lastWatched = new Date("2024-01-15T00:00:00.000Z");
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(watchEntry);
             prisma.watchEntry.update.mockResolvedValueOnce({
                 ...watchEntry,
@@ -711,6 +1086,60 @@ describe("watchlistRoutes", () => {
             expect(payload.lastWatchedAt).toBe(lastWatched.toISOString());
         });
 
+        it("updates lastWatchedAt to null when explicitly set", async () => {
+            const user = buildUser({ id: "user-1" });
+            const mediaItem = buildMediaItem({ id: "media-1" });
+            const watchEntry = buildWatchEntry({
+                id: "entry-1",
+                userId: user.id,
+                mediaItemId: mediaItem.id,
+                lastWatchedAt: new Date("2024-01-15T00:00:00.000Z"),
+                mediaItem,
+            });
+
+            const { accessToken } = issueTokenPair({
+                id: user.id,
+                tokenVersion: user.tokenVersion,
+            });
+
+            mockMediaItemFindUnique(prisma, mediaItem);
+            prisma.watchEntry.findUnique.mockResolvedValueOnce(watchEntry);
+            prisma.watchEntry.update.mockResolvedValueOnce({
+                ...watchEntry,
+                lastWatchedAt: null,
+                mediaItem,
+            });
+
+            const response = await app.inject({
+                method: "PATCH",
+                url: `/watchlist/${mediaItem.id}`,
+                headers: {
+                    authorization: `Bearer ${accessToken}`,
+                },
+                payload: {
+                    lastWatchedAt: null,
+                },
+            });
+
+            expect(response.statusCode).toBe(200);
+            const payload = response.json() as MockedWatchEntry;
+            expect(payload.lastWatchedAt).toBeNull();
+            expect(prisma.watchEntry.update).toHaveBeenCalledWith({
+                where: {
+                    userId_mediaItemId: {
+                        userId: user.id,
+                        mediaItemId: mediaItem.id,
+                    },
+                },
+                data: {
+                    lastWatchedAt: null,
+                },
+                include: {
+                    mediaItem: true,
+                },
+            });
+        });
+
         it("rejects invalid rating", async () => {
             const user = buildUser({ id: "user-1" });
             const mediaItem = buildMediaItem({ id: "media-1" });
@@ -726,6 +1155,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(watchEntry);
 
             const response = await app.inject({
@@ -763,6 +1193,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(watchEntry);
 
             const response = await app.inject({
@@ -787,6 +1218,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(null);
 
             const response = await app.inject({
@@ -842,6 +1274,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(watchEntry);
 
             const response = await app.inject({
@@ -876,6 +1309,7 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
+            mockMediaItemFindUnique(prisma, mediaItem);
             prisma.watchEntry.findUnique.mockResolvedValueOnce(null);
 
             const response = await app.inject({
@@ -961,5 +1395,22 @@ function buildWatchEntry(
     };
 
     return { ...base, ...overrides };
+}
+
+function mockMediaItemFindUnique(
+    prismaMock: PrismaMock,
+    mediaItem: MockedMediaItem
+) {
+    prismaMock.mediaItem.findUnique.mockImplementation((args: {
+        where: { id?: string; externalId?: string };
+    }) => {
+        if (args.where.id === mediaItem.id) {
+            return Promise.resolve(mediaItem);
+        }
+        if (args.where.externalId === mediaItem.externalId) {
+            return Promise.resolve(mediaItem);
+        }
+        return Promise.resolve(null);
+    });
 }
 

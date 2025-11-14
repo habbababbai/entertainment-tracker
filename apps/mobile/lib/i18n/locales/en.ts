@@ -3,6 +3,7 @@ export const en = {
         appName: "Entertainment Tracker",
         pullToRetry: "Pull to retry.",
         notAvailable: "N/A",
+        cancel: "Cancel",
     },
     home: {
         title: "Entertainment Tracker",
@@ -32,6 +33,23 @@ export const en = {
         updatedAt: "Last updated: {{value}}",
         descriptionHeading: "Overview",
         posterFallback: "Poster not available.",
+        addToWatchlist: "Save",
+        removeFromWatchlist: "Remove",
+        addRating: "Rate",
+        ratingWithValue: "Rating: {{rating}}/10",
+        ratingModalTitle: "Rate this title",
+        ratingPlaceholder: "1-10",
+        ratingHint: "Enter a rating from 1 to 10",
+        saveRating: "Save Rating",
+        removeRating: "Remove Rating",
+    },
+    saved: {
+        title: "Saved",
+        subtitle: "Your saved watchlist items.",
+        loading: "Loading watchlist…",
+        errorHeading: "Unable to load watchlist.",
+        emptyList: "No saved items yet.",
+        meta: "Status: {{status}} • Rating: {{rating}}",
     },
 };
 
