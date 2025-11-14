@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
+import { useRouter } from "expo-router";
 
 import LoginScreen from "../../components/LoginScreen";
 import { useAuthStore } from "../../lib/store/auth";
@@ -18,6 +19,7 @@ function SettingsScreen() {
     const user = useAuthStore((state) => state.user);
     const clearAuth = useAuthStore((state) => state.clearAuth);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
+    const router = useRouter();
 
     const handleLogout = async () => {
         setIsLoggingOut(true);
@@ -60,6 +62,16 @@ function SettingsScreen() {
                         </View>
                     )}
                 </View>
+
+                <TouchableOpacity
+                    onPress={() => router.push("/reset-password")}
+                    style={styles.resetPasswordButton}
+                    activeOpacity={0.8}
+                >
+                    <Text style={styles.resetPasswordButtonText}>
+                        Reset Password
+                    </Text>
+                </TouchableOpacity>
 
                 <TouchableOpacity
                     onPress={handleLogout}
@@ -131,6 +143,19 @@ const styles = StyleSheet.create({
     infoValue: {
         fontSize: fontSizes.md,
         color: colors.textPrimary,
+    },
+    resetPasswordButton: {
+        backgroundColor: colors.accent,
+        paddingVertical: verticalScale(14),
+        borderRadius: moderateScale(10),
+        alignItems: "center",
+        justifyContent: "center",
+        marginBottom: verticalScale(16),
+    },
+    resetPasswordButtonText: {
+        color: colors.accentOnAccent,
+        fontSize: fontSizes.md,
+        fontWeight: fontWeights.semiBold,
     },
     logoutButton: {
         backgroundColor: colors.error,

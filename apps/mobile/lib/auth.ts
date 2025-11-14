@@ -1,9 +1,14 @@
 import { resolveApiBaseUrl } from "./media";
+import { useAuthStore } from "./store/auth";
 import type {
     AuthResponse,
     AuthUser,
+    ForgotPasswordRequest,
+    ForgotPasswordResponse,
     LoginRequest,
     RegisterRequest,
+    ResetPasswordRequest,
+    ResetPasswordResponse,
 } from "./types";
 
 const API_BASE_URL = resolveApiBaseUrl();
@@ -112,6 +117,39 @@ export async function logoutUser(refreshToken: string): Promise<void> {
     );
 }
 
+export async function resetPasswordForLoggedInUser(
+    newPassword: string
+): Promise<ResetPasswordResponse> {
+    const user = useAuthStore.getState().user;
+
+    if (!user) {
+        throw new Error("User must be logged in to reset password");
+    }
+
+    const forgotPasswordResponse = await postJson<
+        ForgotPasswordResponse
+    >(
+        "/api/v1/auth/forgot-password",
+        { email: user.email } as ForgotPasswordRequest,
+        parseForgotPasswordResponse
+    );
+
+    if (!forgotPasswordResponse.resetToken) {
+        throw new Error(
+            "Failed to generate reset token. Please try again."
+        );
+    }
+
+    return postJson<ResetPasswordResponse>(
+        "/api/v1/auth/reset-password",
+        {
+            resetToken: forgotPasswordResponse.resetToken,
+            newPassword,
+        } as ResetPasswordRequest,
+        parseResetPasswordResponse
+    );
+}
+
 function parseAuthResponse(value: unknown): AuthResponse {
     if (!isObject(value)) {
         throw new Error("Auth response is not an object");
@@ -148,6 +186,40 @@ function expectString(value: unknown, label: string): string {
     }
 
     return value;
+}
+
+function parseForgotPasswordResponse(value: unknown): ForgotPasswordResponse {
+    if (!isObject(value)) {
+        throw new Error("Forgot password response is not an object");
+    }
+
+    const message = expectString(value.message, "message");
+    const resetToken =
+        "resetToken" in value && typeof value.resetToken === "string"
+            ? value.resetToken
+            : undefined;
+
+    return {
+        message,
+        resetToken,
+    };
+}
+
+function parseResetPasswordResponse(value: unknown): ResetPasswordResponse {
+    if (!isObject(value)) {
+        throw new Error("Reset password response is not an object");
+    }
+
+    if (typeof value.success !== "boolean") {
+        throw new Error("Reset password response missing success flag");
+    }
+
+    const message = expectString(value.message, "message");
+
+    return {
+        success: value.success,
+        message,
+    };
 }
 
 export const __testUtils = {

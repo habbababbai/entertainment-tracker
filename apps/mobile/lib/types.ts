@@ -25,3 +25,22 @@ export interface LoginRequest {
     email: string;
     password: string;
 }
+
+export interface ForgotPasswordRequest {
+    email: string;
+}
+
+export interface ForgotPasswordResponse {
+    message: string;
+    resetToken?: string;
+}
+
+export interface ResetPasswordRequest {
+    resetToken: string;
+    newPassword: string;
+}
+
+export interface ResetPasswordResponse {
+    success: boolean;
+    message: string;
+}
