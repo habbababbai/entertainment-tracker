@@ -78,23 +78,33 @@ export default function MediaDetailsScreen() {
         Error
     >({
         queryKey: ["media-item", trimmedId],
-        queryFn: () => fetchMediaItem(trimmedId),
+        queryFn: async (): Promise<MediaItem> => {
+            const result = await fetchMediaItem(trimmedId);
+            if (!result) {
+                throw new Error("Media item not found.");
+            }
+            return result;
+        },
         enabled: trimmedId.length > 0,
         retry: false,
     });
 
     const { data: watchEntry } = useQuery<WatchEntry | null, Error>({
         queryKey: ["watchlist-entry", trimmedId],
-        queryFn: async () => {
-            if (!isAuthenticated || !trimmedId) return null;
+        queryFn: async (): Promise<WatchEntry | null> => {
+            if (!isAuthenticated || !trimmedId) {
+                return null;
+            }
             try {
-                return await fetchWatchlistEntry(trimmedId);
+                const entry = await fetchWatchlistEntry(trimmedId);
+                return entry || null;
             } catch {
                 return null;
             }
         },
         enabled: isAuthenticated && trimmedId.length > 0,
         retry: false,
+        placeholderData: null,
     });
 
     const addToWatchlistMutation = useMutation({

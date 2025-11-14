@@ -1,11 +1,25 @@
 import React from "react";
-import { act, cleanup, fireEvent, render } from "@testing-library/react-native";
+import {
+    act,
+    cleanup,
+    fireEvent,
+    render,
+    waitFor,
+} from "@testing-library/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { notifyManager } from "@tanstack/query-core";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import MediaDetailsScreen from "../app/media/[id]";
 import type { MediaItem } from "../lib/media";
 import { fetchMediaItem } from "../lib/media";
+import type { WatchEntry } from "../lib/watchlist";
+import {
+    addToWatchlist,
+    fetchWatchlistEntry,
+    removeFromWatchlist,
+    updateWatchlistEntry,
+} from "../lib/watchlist";
+import { useAuthStore } from "../lib/store/auth";
 
 jest.mock("../lib/media", () => {
     const actual = jest.requireActual("../lib/media");
@@ -15,8 +29,42 @@ jest.mock("../lib/media", () => {
     };
 });
 
+jest.mock("../lib/watchlist", () => {
+    const actual = jest.requireActual("../lib/watchlist");
+    return {
+        ...actual,
+        fetchWatchlistEntry: jest.fn(),
+        addToWatchlist: jest.fn(),
+        removeFromWatchlist: jest.fn(),
+        updateWatchlistEntry: jest.fn(),
+    };
+});
+
+jest.mock("../lib/store/auth", () => {
+    const actual = jest.requireActual("../lib/store/auth");
+    return {
+        ...actual,
+        useAuthStore: jest.fn(),
+    };
+});
+
 const fetchMediaItemMock = fetchMediaItem as jest.MockedFunction<
     typeof fetchMediaItem
+>;
+const fetchWatchlistEntryMock = fetchWatchlistEntry as jest.MockedFunction<
+    typeof fetchWatchlistEntry
+>;
+const addToWatchlistMock = addToWatchlist as jest.MockedFunction<
+    typeof addToWatchlist
+>;
+const removeFromWatchlistMock = removeFromWatchlist as jest.MockedFunction<
+    typeof removeFromWatchlist
+>;
+const updateWatchlistEntryMock = updateWatchlistEntry as jest.MockedFunction<
+    typeof updateWatchlistEntry
+>;
+const useAuthStoreMock = useAuthStore as jest.MockedFunction<
+    typeof useAuthStore
 >;
 
 const mockBack = jest.fn();
@@ -41,8 +89,11 @@ import { useLocalSearchParams } from "expo-router";
 const mockUseLocalSearchParams = useLocalSearchParams as unknown as jest.Mock;
 
 const originalScheduler = notifyManager.schedule;
+const activeClients = new Set<QueryClient>();
 
 beforeAll(() => {
+    // Use a synchronous scheduler so callbacks run immediately
+    // This allows React Testing Library's act() to catch them naturally
     notifyManager.setScheduler((callback) => {
         callback();
     });
@@ -53,14 +104,20 @@ afterAll(() => {
 });
 
 function createQueryClient() {
-    return new QueryClient({
+    const queryClient = new QueryClient({
         defaultOptions: {
             queries: {
                 retry: false,
                 gcTime: 0,
+                staleTime: 0,
+                refetchOnWindowFocus: false,
+                refetchOnReconnect: false,
+                refetchOnMount: false,
             },
         },
     });
+    activeClients.add(queryClient);
+    return queryClient;
 }
 
 function renderDetailsScreen() {
@@ -100,12 +157,71 @@ function createMediaItem(overrides: Partial<MediaItem> = {}): MediaItem {
     };
 }
 
+function createWatchEntry(overrides: Partial<WatchEntry> = {}): WatchEntry {
+    return {
+        id: "entry-123",
+        userId: "user-123",
+        mediaItemId: "media-123",
+        status: "PLANNED",
+        rating: null,
+        notes: null,
+        lastWatchedAt: null,
+        createdAt: "2024-01-01T00:00:00.000Z",
+        updatedAt: "2024-01-01T00:00:00.000Z",
+        mediaItem: {
+            id: "media-123",
+            externalId: "tt0000001",
+            source: "omdb",
+            title: "Sample Title",
+            description: "Sample description",
+            posterUrl: "https://example.com/poster.jpg",
+            backdropUrl: "https://example.com/backdrop.jpg",
+            mediaType: "MOVIE",
+            totalSeasons: null,
+            totalEpisodes: null,
+            releaseDate: "2024-01-01T00:00:00.000Z",
+        },
+        ...overrides,
+    };
+}
+
 afterEach(async () => {
+    // Cancel all queries first within act to catch any updates
+    await act(async () => {
+        await Promise.all(
+            Array.from(activeClients).map(async (client) => {
+                await client.cancelQueries({ exact: false });
+            })
+        );
+    });
+    
+    // Clear all caches within act to catch any final updates
+    await act(async () => {
+        activeClients.forEach((client) => {
+            client.clear();
+            client.getMutationCache().clear();
+            client.getQueryCache().clear();
+        });
+        activeClients.clear();
+    });
+    
     cleanup();
+    
     fetchMediaItemMock.mockReset();
+    fetchWatchlistEntryMock.mockReset();
+    addToWatchlistMock.mockReset();
+    removeFromWatchlistMock.mockReset();
+    updateWatchlistEntryMock.mockReset();
     mockBack.mockReset();
     mockUseLocalSearchParams.mockReset();
     mockUseLocalSearchParams.mockReturnValue({ id: "media-123" });
+    useAuthStoreMock.mockReset();
+    useAuthStoreMock.mockImplementation((selector: any) => {
+        if (typeof selector === "function") {
+            return selector({ isAuthenticated: false });
+        }
+        return false;
+    });
 });
 
 describe("MediaDetailsScreen", () => {
@@ -241,5 +357,415 @@ describe("MediaDetailsScreen", () => {
 
         expect(await findByText("Overview")).toBeTruthy();
         expect(await findByText("No description provided.")).toBeTruthy();
+    });
+
+    describe("watchlist functionality", () => {
+        beforeEach(() => {
+            useAuthStoreMock.mockImplementation((selector: any) => {
+                if (typeof selector === "function") {
+                    return selector({ isAuthenticated: true });
+                }
+                return true;
+            });
+        });
+
+        it("does not show watchlist actions when user is not authenticated", async () => {
+            useAuthStoreMock.mockImplementation((selector: any) => {
+                if (typeof selector === "function") {
+                    return selector({ isAuthenticated: false });
+                }
+                return false;
+            });
+
+            fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
+
+            const { queryByText } = renderDetailsScreen();
+
+            await waitFor(() => {
+                expect(fetchMediaItemMock).toHaveBeenCalled();
+            });
+
+            expect(queryByText("Save")).toBeNull();
+            expect(queryByText("Remove")).toBeNull();
+            expect(fetchWatchlistEntryMock).not.toHaveBeenCalled();
+        });
+
+        it("shows save button when item is not in watchlist", async () => {
+            fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
+            fetchWatchlistEntryMock.mockRejectedValueOnce(
+                new Error("Item not found in watchlist")
+            );
+
+            const { findByText } = renderDetailsScreen();
+
+            await waitFor(
+                () => {
+                    expect(fetchMediaItemMock).toHaveBeenCalled();
+                },
+                { timeout: 3000 }
+            );
+
+            await waitFor(
+                () => {
+                    expect(fetchWatchlistEntryMock).toHaveBeenCalled();
+                },
+                { timeout: 3000 }
+            );
+
+            expect(await findByText("Save")).toBeTruthy();
+        });
+
+        it("shows remove button and rating button when item is in watchlist", async () => {
+            fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
+            fetchWatchlistEntryMock.mockResolvedValueOnce(createWatchEntry());
+
+            const { findByText } = renderDetailsScreen();
+
+            await waitFor(
+                () => {
+                    expect(fetchWatchlistEntryMock).toHaveBeenCalled();
+                },
+                { timeout: 3000 }
+            );
+
+            expect(await findByText("Remove")).toBeTruthy();
+            expect(await findByText("Rate")).toBeTruthy();
+        });
+
+        it("adds item to watchlist when save button is pressed", async () => {
+            fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
+            fetchWatchlistEntryMock.mockRejectedValueOnce(
+                new Error("Item not found in watchlist")
+            );
+            addToWatchlistMock.mockResolvedValueOnce(createWatchEntry());
+
+            const { findByText, queryClient } = renderDetailsScreen();
+
+            await waitFor(() => {
+                expect(fetchWatchlistEntryMock).toHaveBeenCalled();
+            });
+
+            const saveButton = await findByText("Save");
+            await act(async () => {
+                fireEvent.press(saveButton);
+            });
+
+            await waitFor(() => {
+                expect(addToWatchlistMock).toHaveBeenCalledWith({
+                    mediaItemId: "media-123",
+                });
+            });
+
+            expect(queryClient.getQueryCache().findAll().length).toBeGreaterThanOrEqual(1);
+        });
+
+        it("removes item from watchlist when remove button is pressed", async () => {
+            fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
+            fetchWatchlistEntryMock.mockResolvedValueOnce(createWatchEntry());
+            removeFromWatchlistMock.mockResolvedValueOnce(undefined);
+
+            const { findByText, queryClient } = renderDetailsScreen();
+
+            await waitFor(() => {
+                expect(fetchWatchlistEntryMock).toHaveBeenCalled();
+            });
+
+            const removeButton = await findByText("Remove");
+            await act(async () => {
+                fireEvent.press(removeButton);
+            });
+
+            await waitFor(() => {
+                expect(removeFromWatchlistMock).toHaveBeenCalledWith("media-123");
+            });
+
+            expect(queryClient.getQueryCache().findAll().length).toBeGreaterThanOrEqual(1);
+        });
+
+        it("shows loading state when watchlist operation is in progress", async () => {
+            fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
+            fetchWatchlistEntryMock.mockRejectedValueOnce(
+                new Error("Item not found in watchlist")
+            );
+            addToWatchlistMock.mockImplementation(
+                () =>
+                    new Promise((resolve) => {
+                        setTimeout(() => resolve(createWatchEntry()), 100);
+                    })
+            );
+
+            const { findByText } = renderDetailsScreen();
+
+            await waitFor(() => {
+                expect(fetchWatchlistEntryMock).toHaveBeenCalled();
+            });
+
+            const saveButton = await findByText("Save");
+            await act(async () => {
+                fireEvent.press(saveButton);
+            });
+
+            expect(await findByText(/Save|Remove/)).toBeTruthy();
+        });
+
+        it("disables watchlist buttons when id is missing", async () => {
+            mockUseLocalSearchParams.mockReturnValue({ id: "" });
+
+            const { queryByText, findByText } = renderDetailsScreen();
+
+            expect(await findByText("Missing media identifier.")).toBeTruthy();
+            expect(fetchMediaItemMock).not.toHaveBeenCalled();
+            expect(queryByText("Save")).toBeNull();
+        });
+    });
+
+    describe("rating functionality", () => {
+        beforeEach(() => {
+            useAuthStoreMock.mockImplementation((selector: any) => {
+                if (typeof selector === "function") {
+                    return selector({ isAuthenticated: true });
+                }
+                return true;
+            });
+        });
+
+        it("opens rating modal when rate button is pressed", async () => {
+            fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
+            fetchWatchlistEntryMock.mockResolvedValueOnce(createWatchEntry());
+
+            const { findByText } = renderDetailsScreen();
+
+            await waitFor(() => {
+                expect(fetchWatchlistEntryMock).toHaveBeenCalled();
+            });
+
+            const rateButton = await findByText("Rate");
+            await act(async () => {
+                fireEvent.press(rateButton);
+            });
+
+            expect(await findByText("Rate this title")).toBeTruthy();
+            expect(await findByText("Enter a rating from 1 to 10")).toBeTruthy();
+        });
+
+        it("pre-fills rating input when item has existing rating", async () => {
+            fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
+            fetchWatchlistEntryMock.mockResolvedValueOnce(
+                createWatchEntry({ rating: 8 })
+            );
+
+            const { findByText, getByPlaceholderText } = renderDetailsScreen();
+
+            await waitFor(() => {
+                expect(fetchWatchlistEntryMock).toHaveBeenCalled();
+            });
+
+            const rateButton = await findByText(/Rating: 8\/10/);
+            await act(async () => {
+                fireEvent.press(rateButton);
+            });
+
+            const input = getByPlaceholderText("1-10");
+            expect(input.props.value).toBe("8");
+        });
+
+        it("submits rating when valid rating is entered", async () => {
+            fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
+            fetchWatchlistEntryMock.mockResolvedValueOnce(createWatchEntry());
+            updateWatchlistEntryMock.mockResolvedValueOnce(
+                createWatchEntry({ rating: 9 })
+            );
+
+            const { findByText, getByPlaceholderText, queryClient } =
+                renderDetailsScreen();
+
+            await waitFor(() => {
+                expect(fetchWatchlistEntryMock).toHaveBeenCalled();
+            });
+
+            const rateButton = await findByText("Rate");
+            await act(async () => {
+                fireEvent.press(rateButton);
+            });
+
+            const input = getByPlaceholderText("1-10");
+            fireEvent.changeText(input, "9");
+
+            const saveButton = await findByText("Save Rating");
+            await act(async () => {
+                fireEvent.press(saveButton);
+            });
+
+            await waitFor(() => {
+                expect(updateWatchlistEntryMock).toHaveBeenCalledWith(
+                    "media-123",
+                    { rating: 9 }
+                );
+            });
+
+            expect(queryClient.getQueryCache().findAll().length).toBeGreaterThanOrEqual(1);
+        });
+
+        it("does not submit rating when rating is invalid", async () => {
+            fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
+            fetchWatchlistEntryMock.mockResolvedValueOnce(createWatchEntry());
+
+            const { findByText, getByPlaceholderText } = renderDetailsScreen();
+
+            await waitFor(() => {
+                expect(fetchWatchlistEntryMock).toHaveBeenCalled();
+            });
+
+            const rateButton = await findByText("Rate");
+            await act(async () => {
+                fireEvent.press(rateButton);
+            });
+
+            const input = getByPlaceholderText("1-10");
+            fireEvent.changeText(input, "15");
+
+            const saveButton = await findByText("Save Rating");
+            await act(async () => {
+                fireEvent.press(saveButton);
+            });
+
+            await waitFor(() => {
+                expect(updateWatchlistEntryMock).not.toHaveBeenCalled();
+            }, { timeout: 1000 });
+        });
+
+        it("does not submit rating when rating is empty", async () => {
+            fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
+            fetchWatchlistEntryMock.mockResolvedValueOnce(createWatchEntry());
+
+            const { findByText, getByPlaceholderText } = renderDetailsScreen();
+
+            await waitFor(() => {
+                expect(fetchWatchlistEntryMock).toHaveBeenCalled();
+            });
+
+            const rateButton = await findByText("Rate");
+            await act(async () => {
+                fireEvent.press(rateButton);
+            });
+
+            const input = getByPlaceholderText("1-10");
+            fireEvent.changeText(input, "");
+
+            const saveButton = await findByText("Save Rating");
+            await act(async () => {
+                fireEvent.press(saveButton);
+            });
+
+            await waitFor(() => {
+                expect(updateWatchlistEntryMock).not.toHaveBeenCalled();
+            }, { timeout: 1000 });
+        });
+
+        it("removes rating when remove rating button is pressed", async () => {
+            fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
+            fetchWatchlistEntryMock.mockResolvedValueOnce(
+                createWatchEntry({ rating: 8 })
+            );
+            updateWatchlistEntryMock.mockResolvedValueOnce(
+                createWatchEntry({ rating: null })
+            );
+
+            const { findByText, queryClient } = renderDetailsScreen();
+
+            await waitFor(() => {
+                expect(fetchWatchlistEntryMock).toHaveBeenCalled();
+            });
+
+            const rateButton = await findByText(/Rating: 8\/10/);
+            await act(async () => {
+                fireEvent.press(rateButton);
+            });
+
+            const removeButton = await findByText("Remove Rating");
+            await act(async () => {
+                fireEvent.press(removeButton);
+            });
+
+            await waitFor(() => {
+                expect(updateWatchlistEntryMock).toHaveBeenCalledWith(
+                    "media-123",
+                    { rating: null }
+                );
+            });
+
+            expect(queryClient.getQueryCache().findAll().length).toBeGreaterThanOrEqual(1);
+        });
+
+        it("closes rating modal when cancel button is pressed", async () => {
+            fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
+            fetchWatchlistEntryMock.mockResolvedValueOnce(createWatchEntry());
+
+            const { findByText, queryByText } = renderDetailsScreen();
+
+            await waitFor(() => {
+                expect(fetchWatchlistEntryMock).toHaveBeenCalled();
+            });
+
+            const rateButton = await findByText("Rate");
+            await act(async () => {
+                fireEvent.press(rateButton);
+            });
+
+            expect(await findByText("Rate this title")).toBeTruthy();
+
+            const cancelButton = await findByText("Cancel");
+            await act(async () => {
+                fireEvent.press(cancelButton);
+            });
+
+            await waitFor(() => {
+                expect(queryByText("Rate this title")).toBeNull();
+            });
+        });
+
+        it("closes rating modal when onRequestClose is called", async () => {
+            fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
+            fetchWatchlistEntryMock.mockResolvedValueOnce(createWatchEntry());
+
+            const { findByText, queryByText, UNSAFE_getByType } = renderDetailsScreen();
+
+            await waitFor(() => {
+                expect(fetchWatchlistEntryMock).toHaveBeenCalled();
+            });
+
+            const rateButton = await findByText("Rate");
+            await act(async () => {
+                fireEvent.press(rateButton);
+            });
+
+            expect(await findByText("Rate this title")).toBeTruthy();
+
+            const { Modal } = require("react-native");
+            const modal = UNSAFE_getByType(Modal);
+            
+            await act(async () => {
+                fireEvent(modal, "requestClose");
+            });
+
+            await waitFor(() => {
+                expect(queryByText("Rate this title")).toBeNull();
+            });
+        });
+
+        it("shows existing rating in rate button when item has rating", async () => {
+            fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
+            fetchWatchlistEntryMock.mockResolvedValueOnce(
+                createWatchEntry({ rating: 7 })
+            );
+
+            const { findByText } = renderDetailsScreen();
+
+            await waitFor(() => {
+                expect(fetchWatchlistEntryMock).toHaveBeenCalled();
+            });
+
+            expect(await findByText(/Rating: 7\/10/)).toBeTruthy();
+        });
     });
 });
