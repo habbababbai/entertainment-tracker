@@ -38,13 +38,20 @@ async function authenticatedFetch<T>(
 
     const url = new URL(path, API_BASE_URL);
 
+    // Only set Content-Type if there's a body
+    const hasBody = options.body !== undefined && options.body !== null;
+    const headers: Record<string, string> = {
+        Authorization: `Bearer ${accessToken}`,
+        ...(options.headers as Record<string, string> | undefined),
+    };
+
+    if (hasBody) {
+        headers["Content-Type"] = "application/json";
+    }
+
     const response = await fetch(url.toString(), {
         ...options,
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${accessToken}`,
-            ...options.headers,
-        },
+        headers,
     });
 
     if (response.status === 401) {

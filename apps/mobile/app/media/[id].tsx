@@ -89,73 +89,103 @@ export default function MediaDetailsScreen() {
         retry: false,
     });
 
+    const externalId = data?.externalId;
     const { data: watchEntry } = useQuery<WatchEntry | null, Error>({
-        queryKey: ["watchlist-entry", data?.externalId],
+        queryKey: ["watchlist-entry", externalId],
         queryFn: async (): Promise<WatchEntry | null> => {
-            if (!isAuthenticated || !data?.externalId) {
+            if (!isAuthenticated || !externalId) {
                 return null;
             }
             try {
-                const entry = await fetchWatchlistEntry(data.externalId);
+                const entry = await fetchWatchlistEntry(externalId);
                 return entry || null;
-            } catch {
-                return null;
+            } catch (error) {
+                // If it's a 404, the item is not in watchlist (expected)
+                if (
+                    error instanceof Error &&
+                    error.message.includes("not found")
+                ) {
+                    return null;
+                }
+                // For other errors, rethrow to surface them
+                throw error;
             }
         },
-        enabled: isAuthenticated && Boolean(data?.externalId),
+        enabled: isAuthenticated && Boolean(externalId),
         retry: false,
         placeholderData: null,
     });
 
     const addToWatchlistMutation = useMutation({
         mutationFn: () => {
-            if (!data?.externalId) {
+            if (!externalId) {
                 throw new Error("Media item external ID not available");
             }
-            return addToWatchlist({ mediaItemId: data.externalId });
+            return addToWatchlist({ mediaItemId: externalId }).then(
+                (result) => ({
+                    result,
+                    externalId,
+                })
+            );
         },
-        onSuccess: () => {
-            if (data?.externalId) {
-                queryClient.invalidateQueries({ queryKey: ["watchlist-entry", data.externalId] });
-            }
+        onSuccess: ({ result, externalId }) => {
+            // Update the cache directly with the new watchlist entry
+            queryClient.setQueryData(["watchlist-entry", externalId], result);
             queryClient.invalidateQueries({ queryKey: ["watchlist"] });
+        },
+        onError: (error) => {
+            console.error("Failed to add to watchlist:", error);
         },
     });
 
     const removeFromWatchlistMutation = useMutation({
-        mutationFn: () => {
-            if (!data?.externalId) {
+        mutationFn: async () => {
+            if (!externalId) {
                 throw new Error("Media item external ID not available");
             }
-            return removeFromWatchlist(data.externalId);
+            const idToRemove = externalId;
+            await removeFromWatchlist(idToRemove);
+            return idToRemove;
         },
-        onSuccess: () => {
-            if (data?.externalId) {
-                queryClient.invalidateQueries({ queryKey: ["watchlist-entry", data.externalId] });
-            }
+        onSuccess: (removedExternalId) => {
+            // Remove the entry from cache
+            queryClient.setQueryData(
+                ["watchlist-entry", removedExternalId],
+                null
+            );
             queryClient.invalidateQueries({ queryKey: ["watchlist"] });
+        },
+        onError: (error) => {
+            console.error("Failed to remove from watchlist:", error);
         },
     });
 
     const updateRatingMutation = useMutation({
         mutationFn: (rating: number | null) => {
-            if (!data?.externalId) {
+            if (!externalId) {
                 throw new Error("Media item external ID not available");
             }
-            return updateWatchlistEntry(data.externalId, { rating });
+            return updateWatchlistEntry(externalId, { rating }).then(
+                (result) => ({
+                    result,
+                    externalId,
+                })
+            );
         },
-        onSuccess: () => {
-            if (data?.externalId) {
-                queryClient.invalidateQueries({ queryKey: ["watchlist-entry", data.externalId] });
-            }
+        onSuccess: ({ result, externalId }) => {
+            // Update the cache directly with the updated watchlist entry
+            queryClient.setQueryData(["watchlist-entry", externalId], result);
             queryClient.invalidateQueries({ queryKey: ["watchlist"] });
             setShowRatingModal(false);
             setRatingInput("");
         },
+        onError: (error) => {
+            console.error("Failed to update rating:", error);
+        },
     });
 
     const handleSaveToggle = useCallback(() => {
-        if (!data?.externalId) {
+        if (!externalId) {
             return;
         }
         if (watchEntry) {
@@ -163,7 +193,12 @@ export default function MediaDetailsScreen() {
         } else {
             addToWatchlistMutation.mutate();
         }
-    }, [watchEntry, addToWatchlistMutation, removeFromWatchlistMutation, data]);
+    }, [
+        watchEntry,
+        addToWatchlistMutation,
+        removeFromWatchlistMutation,
+        externalId,
+    ]);
 
     const handleRatingPress = useCallback(() => {
         if (watchEntry?.rating) {
@@ -266,7 +301,9 @@ export default function MediaDetailsScreen() {
                     <View style={styles.header}>
                         <Text style={styles.title}>{data.title}</Text>
                         <View style={styles.badge}>
-                            <Text style={styles.badgeText}>{data.mediaType}</Text>
+                            <Text style={styles.badgeText}>
+                                {data.mediaType}
+                            </Text>
                         </View>
                     </View>
                     {data.posterUrl ? (
@@ -287,11 +324,12 @@ export default function MediaDetailsScreen() {
                             <TouchableOpacity
                                 accessibilityRole="button"
                                 onPress={handleSaveToggle}
-                                disabled={isLoadingWatchlist || !data?.externalId}
+                                disabled={isLoadingWatchlist || !externalId}
                                 style={[
                                     styles.actionButton,
                                     watchEntry && styles.actionButtonActive,
-                                    isLoadingWatchlist && styles.actionButtonDisabled,
+                                    isLoadingWatchlist &&
+                                        styles.actionButtonDisabled,
                                 ]}
                                 activeOpacity={0.8}
                             >
@@ -308,7 +346,8 @@ export default function MediaDetailsScreen() {
                                     <Text
                                         style={[
                                             styles.actionButtonText,
-                                            watchEntry && styles.actionButtonTextActive,
+                                            watchEntry &&
+                                                styles.actionButtonTextActive,
                                         ]}
                                     >
                                         {watchEntry
@@ -325,7 +364,8 @@ export default function MediaDetailsScreen() {
                                     style={[
                                         styles.actionButton,
                                         styles.ratingButton,
-                                        isLoadingWatchlist && styles.actionButtonDisabled,
+                                        isLoadingWatchlist &&
+                                            styles.actionButtonDisabled,
                                     ]}
                                     activeOpacity={0.8}
                                 >
@@ -390,14 +430,18 @@ export default function MediaDetailsScreen() {
                                 {watchEntry?.rating && (
                                     <TouchableOpacity
                                         onPress={handleRatingRemove}
-                                        disabled={updateRatingMutation.isPending}
+                                        disabled={
+                                            updateRatingMutation.isPending
+                                        }
                                         style={[
                                             styles.modalButton,
                                             styles.modalButtonRemove,
                                         ]}
                                         activeOpacity={0.8}
                                     >
-                                        <Text style={styles.modalButtonRemoveText}>
+                                        <Text
+                                            style={styles.modalButtonRemoveText}
+                                        >
                                             {t("details.removeRating")}
                                         </Text>
                                     </TouchableOpacity>
@@ -423,7 +467,11 @@ export default function MediaDetailsScreen() {
                                             color={colors.accentOnAccent}
                                         />
                                     ) : (
-                                        <Text style={styles.modalButtonPrimaryText}>
+                                        <Text
+                                            style={
+                                                styles.modalButtonPrimaryText
+                                            }
+                                        >
                                             {t("details.saveRating")}
                                         </Text>
                                     )}
