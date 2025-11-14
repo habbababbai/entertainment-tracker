@@ -63,7 +63,10 @@ function SettingsScreen() {
 
                 <TouchableOpacity
                     onPress={handleLogout}
-                    style={[styles.logoutButton, isLoggingOut && styles.logoutButtonDisabled]}
+                    style={[
+                        styles.logoutButton,
+                        isLoggingOut && styles.logoutButtonDisabled,
+                    ]}
                     disabled={isLoggingOut}
                     activeOpacity={0.8}
                 >
