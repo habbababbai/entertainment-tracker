@@ -16,7 +16,7 @@ interface AuthState {
     updateUser: (user: Partial<AuthUser>) => void;
 }
 
-const secureStorage = {
+export const secureStorage = {
     getItem: async (name: string): Promise<string | null> => {
         try {
             return await SecureStore.getItemAsync(name);
