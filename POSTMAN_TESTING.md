@@ -1,6 +1,6 @@
-# Postman Testing Guide for New Endpoints
+# Postman Testing Guide
 
-This guide shows how to test the new authentication endpoints in Postman.
+This guide shows how to test the authentication and watchlist endpoints in Postman.
 
 ## Base URL
 
@@ -243,7 +243,9 @@ Authorization: Bearer PASTE_ACCESS_TOKEN_HERE
 
     - Variable: `baseUrl` = `http://localhost:3000/api/v1`
     - Variable: `accessToken` = (set after login)
+    - Variable: `refreshToken` = (set after login)
     - Variable: `resetToken` = (set after forgot-password)
+    - Variable: `mediaItemId` = (set after getting a media item)
 
 2. **Use Variables in Requests**:
 
@@ -273,6 +275,464 @@ Authorization: Bearer PASTE_ACCESS_TOKEN_HERE
     }
     ```
 
+    **After Getting Media Item** (from GET /media or GET /media/:id):
+
+    ```javascript
+    if (pm.response.code === 200) {
+        const jsonData = pm.response.json();
+        // For single media item response
+        if (jsonData.id) {
+            pm.environment.set("mediaItemId", jsonData.id);
+        }
+        // For media list response
+        if (jsonData.items && jsonData.items.length > 0) {
+            pm.environment.set("mediaItemId", jsonData.items[0].id);
+        }
+    }
+    ```
+
+    **After Adding to Watchlist**:
+
+    ```javascript
+    if (pm.response.code === 201) {
+        const jsonData = pm.response.json();
+        pm.environment.set("mediaItemId", jsonData.mediaItemId);
+    }
+    ```
+
+---
+
+## Watchlist Endpoints
+
+### Prerequisites for Watchlist Testing
+
+-   You need a valid access token (from login or register endpoint)
+-   You need at least one media item ID in your database (media items are created when searching/accessing media)
+
+---
+
+### 1. Add Item to Watchlist
+
+**POST /api/v1/watchlist**
+
+Adds a media item to the user's watchlist.
+
+#### Request
+
+-   **Method**: `POST`
+-   **URL**: `http://localhost:3000/api/v1/watchlist`
+-   **Headers**:
+    ```
+    Content-Type: application/json
+    Authorization: Bearer YOUR_ACCESS_TOKEN_HERE
+    ```
+-   **Body** (raw JSON):
+    ```json
+    {
+        "mediaItemId": "media-item-uuid-here"
+    }
+    ```
+
+#### Expected Response (201 Created)
+
+```json
+{
+    "id": "entry-uuid",
+    "userId": "user-uuid",
+    "mediaItemId": "media-item-uuid",
+    "status": "PLANNED",
+    "rating": null,
+    "notes": null,
+    "lastWatchedAt": null,
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-01T00:00:00.000Z",
+    "mediaItem": {
+        "id": "media-item-uuid",
+        "externalId": "tt0000001",
+        "source": "omdb",
+        "title": "Test Movie",
+        "description": "Movie description",
+        "posterUrl": "https://example.com/poster.jpg",
+        "backdropUrl": "https://example.com/backdrop.jpg",
+        "mediaType": "MOVIE",
+        "totalSeasons": null,
+        "totalEpisodes": null,
+        "releaseDate": "2024-01-01T00:00:00.000Z"
+    }
+}
+```
+
+#### Error Cases
+
+**Media Item Not Found (404)**:
+
+```json
+{
+    "statusCode": 404,
+    "error": "Not Found",
+    "message": "Media item not found"
+}
+```
+
+**Item Already in Watchlist (409)**:
+
+```json
+{
+    "statusCode": 409,
+    "error": "Conflict",
+    "message": "Item already in watchlist"
+}
+```
+
+---
+
+### 2. Remove Item from Watchlist
+
+**DELETE /api/v1/watchlist/:mediaItemId**
+
+Removes a media item from the user's watchlist.
+
+#### Request
+
+-   **Method**: `DELETE`
+-   **URL**: `http://localhost:3000/api/v1/watchlist/{mediaItemId}`
+-   **Headers**:
+    ```
+    Content-Type: application/json
+    Authorization: Bearer YOUR_ACCESS_TOKEN_HERE
+    ```
+
+#### Expected Response (200 OK)
+
+```json
+{
+    "success": true,
+    "message": "Item removed from watchlist"
+}
+```
+
+#### Error Cases
+
+**Item Not in Watchlist (404)**:
+
+```json
+{
+    "statusCode": 404,
+    "error": "Not Found",
+    "message": "Item not found in watchlist"
+}
+```
+
+---
+
+### 3. Get All Watchlist Items
+
+**GET /api/v1/watchlist**
+
+Retrieves all items in the user's watchlist, ordered by creation date (newest first).
+
+#### Request
+
+-   **Method**: `GET`
+-   **URL**: `http://localhost:3000/api/v1/watchlist`
+-   **Headers**:
+    ```
+    Authorization: Bearer YOUR_ACCESS_TOKEN_HERE
+    ```
+
+#### Expected Response (200 OK)
+
+```json
+{
+    "items": [
+        {
+            "id": "entry-uuid",
+            "userId": "user-uuid",
+            "mediaItemId": "media-item-uuid",
+            "status": "WATCHING",
+            "rating": 8,
+            "notes": "Great movie!",
+            "lastWatchedAt": "2024-01-15T00:00:00.000Z",
+            "createdAt": "2024-01-01T00:00:00.000Z",
+            "updatedAt": "2024-01-15T00:00:00.000Z",
+            "mediaItem": {
+                "id": "media-item-uuid",
+                "externalId": "tt0000001",
+                "source": "omdb",
+                "title": "Test Movie",
+                "description": "Movie description",
+                "posterUrl": "https://example.com/poster.jpg",
+                "backdropUrl": "https://example.com/backdrop.jpg",
+                "mediaType": "MOVIE",
+                "totalSeasons": null,
+                "totalEpisodes": null,
+                "releaseDate": "2024-01-01T00:00:00.000Z"
+            }
+        }
+    ]
+}
+```
+
+**Empty Watchlist (200 OK)**:
+
+```json
+{
+    "items": []
+}
+```
+
+---
+
+### 4. Update Watchlist Entry
+
+**PATCH /api/v1/watchlist/:mediaItemId**
+
+Updates tracking information for a watchlist item (status, rating, notes, lastWatchedAt).
+
+#### Request
+
+-   **Method**: `PATCH`
+-   **URL**: `http://localhost:3000/api/v1/watchlist/{mediaItemId}`
+-   **Headers**:
+    ```
+    Content-Type: application/json
+    Authorization: Bearer YOUR_ACCESS_TOKEN_HERE
+    ```
+-   **Body** (raw JSON, all fields optional):
+    ```json
+    {
+        "status": "WATCHING",
+        "rating": 8,
+        "notes": "Really enjoying this!",
+        "lastWatchedAt": "2024-01-15T00:00:00.000Z"
+    }
+    ```
+
+**Available Status Values**: `PLANNED`, `WATCHING`, `COMPLETED`, `ON_HOLD`, `DROPPED`
+
+**Rating**: Integer between 1-10, or `null` to remove rating
+
+**Notes**: String or `null` to remove notes
+
+**lastWatchedAt**: ISO 8601 date string or `null` to remove
+
+#### Expected Response (200 OK)
+
+```json
+{
+    "id": "entry-uuid",
+    "userId": "user-uuid",
+    "mediaItemId": "media-item-uuid",
+    "status": "WATCHING",
+    "rating": 8,
+    "notes": "Really enjoying this!",
+    "lastWatchedAt": "2024-01-15T00:00:00.000Z",
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-15T00:00:00.000Z",
+    "mediaItem": {
+        "id": "media-item-uuid",
+        "externalId": "tt0000001",
+        "source": "omdb",
+        "title": "Test Movie",
+        "description": "Movie description",
+        "posterUrl": "https://example.com/poster.jpg",
+        "backdropUrl": "https://example.com/backdrop.jpg",
+        "mediaType": "MOVIE",
+        "totalSeasons": null,
+        "totalEpisodes": null,
+        "releaseDate": "2024-01-01T00:00:00.000Z"
+    }
+}
+```
+
+#### Example Updates
+
+**Update Only Status**:
+
+```json
+{
+    "status": "COMPLETED"
+}
+```
+
+**Update Only Rating**:
+
+```json
+{
+    "rating": 9
+}
+```
+
+**Remove Rating**:
+
+```json
+{
+    "rating": null
+}
+```
+
+**Update Multiple Fields**:
+
+```json
+{
+    "status": "COMPLETED",
+    "rating": 9,
+    "notes": "Amazing movie! Highly recommend.",
+    "lastWatchedAt": "2024-01-20T00:00:00.000Z"
+}
+```
+
+#### Error Cases
+
+**Item Not in Watchlist (404)**:
+
+```json
+{
+    "statusCode": 404,
+    "error": "Not Found",
+    "message": "Item not found in watchlist"
+}
+```
+
+**Invalid Rating (400)**:
+
+```json
+{
+    "statusCode": 400,
+    "error": "Bad Request",
+    "message": "body/rating must be <= 10"
+}
+```
+
+---
+
+### 5. Get Specific Watchlist Entry
+
+**GET /api/v1/watchlist/:mediaItemId**
+
+Retrieves a specific watchlist entry for a media item. Useful for checking if an item is already in the watchlist.
+
+#### Request
+
+-   **Method**: `GET`
+-   **URL**: `http://localhost:3000/api/v1/watchlist/{mediaItemId}`
+-   **Headers**:
+    ```
+    Authorization: Bearer YOUR_ACCESS_TOKEN_HERE
+    ```
+
+#### Expected Response (200 OK)
+
+Same structure as the individual item in the "Get All Watchlist Items" response.
+
+#### Error Cases
+
+**Item Not in Watchlist (404)**:
+
+```json
+{
+    "statusCode": 404,
+    "error": "Not Found",
+    "message": "Item not found in watchlist"
+}
+```
+
+---
+
+## Complete Watchlist Testing Flow
+
+### Step 1: Login or Register
+
+```
+POST http://localhost:3000/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "Password123!"
+}
+```
+
+**Save the `accessToken` from the response.**
+
+### Step 2: Get a Media Item ID
+
+First, search for or get a media item to get its ID:
+
+```
+GET http://localhost:3000/api/v1/media?query=inception
+```
+
+Or access a specific media item:
+
+```
+GET http://localhost:3000/api/v1/media/tt1375666
+```
+
+**Copy the `id` field from the media item response (not `externalId`).**
+
+### Step 3: Add Item to Watchlist
+
+```
+POST http://localhost:3000/api/v1/watchlist
+Content-Type: application/json
+Authorization: Bearer YOUR_ACCESS_TOKEN
+
+{
+  "mediaItemId": "PASTE_MEDIA_ITEM_ID_HERE"
+}
+```
+
+### Step 4: Get All Watchlist Items
+
+```
+GET http://localhost:3000/api/v1/watchlist
+Authorization: Bearer YOUR_ACCESS_TOKEN
+```
+
+### Step 5: Get Specific Watchlist Entry
+
+```
+GET http://localhost:3000/api/v1/watchlist/PASTE_MEDIA_ITEM_ID_HERE
+Authorization: Bearer YOUR_ACCESS_TOKEN
+```
+
+### Step 6: Update Watchlist Entry
+
+```
+PATCH http://localhost:3000/api/v1/watchlist/PASTE_MEDIA_ITEM_ID_HERE
+Content-Type: application/json
+Authorization: Bearer YOUR_ACCESS_TOKEN
+
+{
+  "status": "WATCHING",
+  "rating": 8,
+  "notes": "Great movie!"
+}
+```
+
+### Step 7: Update Status to Completed
+
+```
+PATCH http://localhost:3000/api/v1/watchlist/PASTE_MEDIA_ITEM_ID_HERE
+Content-Type: application/json
+Authorization: Bearer YOUR_ACCESS_TOKEN
+
+{
+  "status": "COMPLETED",
+  "rating": 9,
+  "notes": "Amazing! Highly recommend.",
+  "lastWatchedAt": "2024-01-20T00:00:00.000Z"
+}
+```
+
+### Step 8: Remove Item from Watchlist
+
+```
+DELETE http://localhost:3000/api/v1/watchlist/PASTE_MEDIA_ITEM_ID_HERE
+Authorization: Bearer YOUR_ACCESS_TOKEN
+```
+
 ---
 
 ## Troubleshooting
@@ -284,16 +744,3 @@ Authorization: Bearer PASTE_ACCESS_TOKEN_HERE
 5. **CORS issues**: CORS is enabled in the backend, so this shouldn't be an issue
 
 ---
-
-## Quick Test Checklist
-
--   [ ] Forgot password returns token (even for non-existent email)
--   [ ] Reset password works with valid token
--   [ ] Reset password rejects expired token
--   [ ] Reset password rejects invalid token
--   [ ] Delete account requires valid token
--   [ ] Delete account requires correct password
--   [ ] Delete account requires matching email
--   [ ] Delete account invalidates token version check
--   [ ] After password reset, old tokens are invalidated
--   [ ] After account deletion, user cannot login
