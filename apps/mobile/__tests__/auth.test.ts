@@ -81,7 +81,7 @@ describe("auth helpers", () => {
         expect(options?.body).toBe(JSON.stringify(body));
     });
 
-    it("logs in a user and surfaces HTTP errors", async () => {
+    it("logs in a user and surfaces HTTP errors with message field", async () => {
         const { loginUser } = await loadModule();
 
         fetchMock.mockResolvedValue({
@@ -105,6 +105,121 @@ describe("auth helpers", () => {
         await expect(
             loginUser({ email: "nope@example.com", password: "wrong" })
         ).rejects.toThrow("Invalid credentials");
+    });
+
+    it("surfaces HTTP errors with error field when message is missing", async () => {
+        const { loginUser } = await loadModule();
+
+        fetchMock.mockResolvedValue({
+            ok: false,
+            status: 401,
+            headers: {
+                get: (name: string) => {
+                    if (name === "content-type") {
+                        return "application/json";
+                    }
+                    return null;
+                },
+            },
+            json: async () => ({
+                statusCode: 401,
+                error: "Unauthorized",
+            }),
+        });
+
+        await expect(
+            loginUser({ email: "nope@example.com", password: "wrong" })
+        ).rejects.toThrow("Unauthorized");
+    });
+
+    it("surfaces HTTP errors from plain text responses", async () => {
+        const { loginUser } = await loadModule();
+
+        fetchMock.mockResolvedValue({
+            ok: false,
+            status: 401,
+            headers: {
+                get: (name: string) => {
+                    if (name === "content-type") {
+                        return "text/plain";
+                    }
+                    return null;
+                },
+            },
+            text: async () => "Invalid credentials",
+        });
+
+        await expect(
+            loginUser({ email: "nope@example.com", password: "wrong" })
+        ).rejects.toThrow("Invalid credentials");
+    });
+
+    it("surfaces HTTP errors from plain text with whitespace", async () => {
+        const { loginUser } = await loadModule();
+
+        fetchMock.mockResolvedValue({
+            ok: false,
+            status: 401,
+            headers: {
+                get: (name: string) => {
+                    if (name === "content-type") {
+                        return "text/plain";
+                    }
+                    return null;
+                },
+            },
+            text: async () => "  Invalid credentials  ",
+        });
+
+        await expect(
+            loginUser({ email: "nope@example.com", password: "wrong" })
+        ).rejects.toThrow("Invalid credentials");
+    });
+
+    it("surfaces HTTP errors from empty text response", async () => {
+        const { loginUser } = await loadModule();
+
+        fetchMock.mockResolvedValue({
+            ok: false,
+            status: 401,
+            headers: {
+                get: (name: string) => {
+                    if (name === "content-type") {
+                        return "text/plain";
+                    }
+                    return null;
+                },
+            },
+            text: async () => "   ",
+        });
+
+        await expect(
+            loginUser({ email: "nope@example.com", password: "wrong" })
+        ).rejects.toThrow("Request failed with status 401");
+    });
+
+    it("surfaces HTTP errors when JSON error response has no message or error field", async () => {
+        const { loginUser } = await loadModule();
+
+        fetchMock.mockResolvedValue({
+            ok: false,
+            status: 500,
+            headers: {
+                get: (name: string) => {
+                    if (name === "content-type") {
+                        return "application/json";
+                    }
+                    return null;
+                },
+            },
+            json: async () => ({
+                statusCode: 500,
+            }),
+        });
+
+        await expect(
+            loginUser({ email: "test@example.com", password: "password" })
+        ).rejects.toThrow("Request failed with status 500");
     });
 
     it("falls back to status message when response body cannot be read", async () => {
