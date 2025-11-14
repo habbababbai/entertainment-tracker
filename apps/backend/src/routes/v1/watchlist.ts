@@ -62,6 +62,13 @@ interface AddWatchlistBody {
     mediaItemId: string;
 }
 
+interface UpdateWatchlistBody {
+    status?: "PLANNED" | "WATCHING" | "COMPLETED" | "ON_HOLD" | "DROPPED";
+    rating?: number | null;
+    notes?: string | null;
+    lastWatchedAt?: string | null;
+}
+
 export const watchlistRoutes: FastifyPluginAsync = async (
     app: FastifyInstance
 ) => {
@@ -261,6 +268,197 @@ export const watchlistRoutes: FastifyPluginAsync = async (
             return {
                 items: watchEntries.map(serializeWatchEntry),
             };
+        }
+    );
+
+    app.patch(
+        "/watchlist/:mediaItemId",
+        {
+            onRequest: [app.authenticate],
+            schema: {
+                headers: {
+                    type: "object",
+                    properties: {
+                        authorization: {
+                            type: "string",
+                            pattern: "^Bearer .+",
+                        },
+                    },
+                    required: ["authorization"],
+                },
+                params: {
+                    type: "object",
+                    properties: {
+                        mediaItemId: {
+                            type: "string",
+                            minLength: 1,
+                        },
+                    },
+                    required: ["mediaItemId"],
+                    additionalProperties: false,
+                },
+                body: {
+                    type: "object",
+                    properties: {
+                        status: {
+                            type: "string",
+                            enum: [
+                                "PLANNED",
+                                "WATCHING",
+                                "COMPLETED",
+                                "ON_HOLD",
+                                "DROPPED",
+                            ],
+                        },
+                        rating: {
+                            type: ["integer", "null"],
+                            minimum: 1,
+                            maximum: 10,
+                        },
+                        notes: {
+                            type: ["string", "null"],
+                        },
+                        lastWatchedAt: {
+                            type: ["string", "null"],
+                            format: "date-time",
+                        },
+                    },
+                    additionalProperties: false,
+                },
+                response: {
+                    200: watchEntrySchema,
+                    400: errorResponseSchema,
+                    404: errorResponseSchema,
+                    401: errorResponseSchema,
+                },
+            },
+        },
+        async (request) => {
+            const { mediaItemId } = request.params as { mediaItemId: string };
+            const userId = request.user.id;
+            const body = request.body as UpdateWatchlistBody;
+
+            const watchEntry = await app.prisma.watchEntry.findUnique({
+                where: {
+                    userId_mediaItemId: {
+                        userId,
+                        mediaItemId,
+                    },
+                },
+                include: {
+                    mediaItem: true,
+                },
+            });
+
+            if (!watchEntry) {
+                throw notFound("Item not found in watchlist");
+            }
+
+            const updateData: {
+                status?:
+                    | "PLANNED"
+                    | "WATCHING"
+                    | "COMPLETED"
+                    | "ON_HOLD"
+                    | "DROPPED";
+                rating?: number | null;
+                notes?: string | null;
+                lastWatchedAt?: Date | null;
+            } = {};
+
+            if (body.status !== undefined) {
+                updateData.status = body.status;
+            }
+
+            if (body.rating !== undefined) {
+                updateData.rating = body.rating;
+            }
+
+            if (body.notes !== undefined) {
+                updateData.notes = body.notes;
+            }
+
+            if (body.lastWatchedAt !== undefined) {
+                updateData.lastWatchedAt = body.lastWatchedAt
+                    ? new Date(body.lastWatchedAt)
+                    : null;
+            }
+
+            if (Object.keys(updateData).length === 0) {
+                return serializeWatchEntry(watchEntry);
+            }
+
+            const updatedEntry = await app.prisma.watchEntry.update({
+                where: {
+                    userId_mediaItemId: {
+                        userId,
+                        mediaItemId,
+                    },
+                },
+                data: updateData,
+                include: {
+                    mediaItem: true,
+                },
+            });
+
+            return serializeWatchEntry(updatedEntry);
+        }
+    );
+
+    app.get(
+        "/watchlist/:mediaItemId",
+        {
+            onRequest: [app.authenticate],
+            schema: {
+                headers: {
+                    type: "object",
+                    properties: {
+                        authorization: {
+                            type: "string",
+                            pattern: "^Bearer .+",
+                        },
+                    },
+                    required: ["authorization"],
+                },
+                params: {
+                    type: "object",
+                    properties: {
+                        mediaItemId: {
+                            type: "string",
+                            minLength: 1,
+                        },
+                    },
+                    required: ["mediaItemId"],
+                    additionalProperties: false,
+                },
+                response: {
+                    200: watchEntrySchema,
+                    404: errorResponseSchema,
+                    401: errorResponseSchema,
+                },
+            },
+        },
+        async (request) => {
+            const { mediaItemId } = request.params as { mediaItemId: string };
+            const userId = request.user.id;
+
+            const watchEntry = await app.prisma.watchEntry.findUnique({
+                where: {
+                    userId_mediaItemId: {
+                        userId,
+                        mediaItemId,
+                    },
+                },
+                include: {
+                    mediaItem: true,
+                },
+            });
+
+            if (!watchEntry) {
+                throw notFound("Item not found in watchlist");
+            }
+
+            return serializeWatchEntry(watchEntry);
         }
     );
 };
