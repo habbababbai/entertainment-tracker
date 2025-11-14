@@ -69,8 +69,7 @@ const errorResponseSchema = {
     required: ["statusCode", "error", "message"],
 } as const;
 
-// Use contract types for TypeScript type safety
-// Fastify JSON schemas are still used for runtime validation
+
 type AddWatchlistBody = AddWatchlistRequest;
 type UpdateWatchlistBody = UpdateWatchlistRequest;
 
@@ -78,24 +77,20 @@ async function resolveMediaItemId(
     app: FastifyInstance,
     mediaItemId: string
 ): Promise<string> {
-    // Try to find by internal ID first (for backward compatibility)
     let mediaItem = await app.prisma.mediaItem.findUnique({
         where: { id: mediaItemId },
     });
 
-    // If not found, try to find by externalId
     if (!mediaItem) {
         mediaItem = await app.prisma.mediaItem.findUnique({
             where: { externalId: mediaItemId },
         });
     }
 
-    // If found, return the internal ID
     if (mediaItem) {
         return mediaItem.id;
     }
 
-    // If still not found, fetch from OMDb and create in database
     const detail = await requestOmdb<OmdbDetailResponse>(app, {
         i: mediaItemId,
         plot: "short",
@@ -113,7 +108,6 @@ async function resolveMediaItemId(
         throw notFound("Media item not found");
     }
 
-    // Create the media item in the database
     const createdMediaItem = await app.prisma.mediaItem.upsert({
         where: { externalId: mapped.externalId },
         update: {

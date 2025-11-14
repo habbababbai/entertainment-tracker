@@ -73,7 +73,6 @@ describe("watchlistRoutes", () => {
             },
         };
 
-        // Mock OMDb requests to fail for non-existent items
         requestOmdbSpy = vi.spyOn(omdbModule, "requestOmdb").mockImplementation(
             async () => {
                 return {
@@ -187,7 +186,6 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
-            // Mock not finding by internal ID or external ID
             prisma.mediaItem.findUnique.mockResolvedValue(null);
 
             const response = await app.inject({
@@ -289,13 +287,10 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
-            // Mock not finding by internal ID or external ID
             prisma.mediaItem.findUnique.mockResolvedValue(null);
 
-            // Mock OMDb request to return valid response
             requestOmdbSpy.mockResolvedValueOnce(omdbResponse as never);
 
-            // Mock upsert to create new media item
             const createdMediaItem = buildMediaItem({
                 id: "new-media-id",
                 externalId,
@@ -359,13 +354,10 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
-            // Mock not finding by internal ID or external ID initially
             prisma.mediaItem.findUnique.mockResolvedValue(null);
 
-            // Mock OMDb request
             requestOmdbSpy.mockResolvedValueOnce(omdbResponse as never);
 
-            // Mock upsert to update existing media item
             const updatedMediaItem = buildMediaItem({
                 id: existingMediaItem.id,
                 externalId,
@@ -416,7 +408,6 @@ describe("watchlistRoutes", () => {
 
             prisma.mediaItem.findUnique.mockResolvedValue(null);
 
-            // Mock OMDb to return a different error
             requestOmdbSpy.mockResolvedValueOnce({
                 Response: "False",
                 Error: "API key invalid",
@@ -451,7 +442,6 @@ describe("watchlistRoutes", () => {
 
             prisma.mediaItem.findUnique.mockResolvedValue(null);
 
-            // Mock OMDb to return error with undefined Error field
             requestOmdbSpy.mockResolvedValueOnce({
                 Response: "False",
                 Error: undefined,
@@ -486,14 +476,12 @@ describe("watchlistRoutes", () => {
 
             prisma.mediaItem.findUnique.mockResolvedValue(null);
 
-            // Mock OMDb to return valid response
             requestOmdbSpy.mockResolvedValueOnce({
                 Response: "True",
                 imdbID: externalId,
                 Title: "Movie",
             } as never);
 
-            // Mock mapOmdbDetail to return null
             const omdbModule = await import("../src/lib/omdb/index.js");
             const mapOmdbDetailSpy = vi
                 .spyOn(omdbModule, "mapOmdbDetail")
@@ -531,16 +519,13 @@ describe("watchlistRoutes", () => {
                 tokenVersion: user.tokenVersion,
             });
 
-            // Mock not finding by internal ID, but finding by externalId
             prisma.mediaItem.findUnique.mockImplementation((args: {
                 where: { id?: string; externalId?: string };
             }) => {
                 if (args.where.id === "tt1234567") {
-                    // Not found by internal ID
                     return Promise.resolve(null);
                 }
                 if (args.where.externalId === "tt1234567") {
-                    // Found by externalId
                     return Promise.resolve(mediaItem);
                 }
                 return Promise.resolve(null);
