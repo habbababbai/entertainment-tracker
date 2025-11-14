@@ -39,14 +39,15 @@ const mockTokens: AuthTokens = {
 };
 
 describe("useAuthStore", () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         if (!isNativePlatform) {
             return;
         }
         jest.clearAllMocks();
         mockGetItem.mockResolvedValue(null);
-        act(() => {
-            useAuthStore.getState().clearAuth();
+        mockSetItem.mockResolvedValue(undefined);
+        await act(async () => {
+            await useAuthStore.getState().clearAuth();
         });
     });
 
@@ -64,11 +65,11 @@ describe("useAuthStore", () => {
 
     (isNativePlatform ? it : it.skip)(
         "sets auth state with user and tokens",
-        () => {
+        async () => {
             const { result } = renderHook(() => useAuthStore());
 
-            act(() => {
-                result.current.setAuth(mockUser, mockTokens);
+            await act(async () => {
+                await result.current.setAuth(mockUser, mockTokens);
             });
 
             expect(result.current.user).toEqual(mockUser);
@@ -80,7 +81,7 @@ describe("useAuthStore", () => {
 
     (isNativePlatform ? it : it.skip)(
         "sets auth state from AuthResponse (backend response)",
-        () => {
+        async () => {
             const { result } = renderHook(() => useAuthStore());
 
             const authResponse: AuthResponse = {
@@ -88,8 +89,8 @@ describe("useAuthStore", () => {
                 ...mockTokens,
             };
 
-            act(() => {
-                result.current.setAuthFromResponse(authResponse);
+            await act(async () => {
+                await result.current.setAuthFromResponse(authResponse);
             });
 
             expect(result.current.user).toEqual(mockUser);
@@ -99,17 +100,17 @@ describe("useAuthStore", () => {
         }
     );
 
-    (isNativePlatform ? it : it.skip)("clears auth state", () => {
+    (isNativePlatform ? it : it.skip)("clears auth state", async () => {
         const { result } = renderHook(() => useAuthStore());
 
-        act(() => {
-            result.current.setAuth(mockUser, mockTokens);
+        await act(async () => {
+            await result.current.setAuth(mockUser, mockTokens);
         });
 
         expect(result.current.isAuthenticated).toBe(true);
 
-        act(() => {
-            result.current.clearAuth();
+        await act(async () => {
+            await result.current.clearAuth();
         });
 
         expect(result.current.user).toBeNull();
@@ -118,21 +119,24 @@ describe("useAuthStore", () => {
         expect(result.current.isAuthenticated).toBe(false);
     });
 
-    (isNativePlatform ? it : it.skip)("updates user when user exists", () => {
-        const { result } = renderHook(() => useAuthStore());
+    (isNativePlatform ? it : it.skip)(
+        "updates user when user exists",
+        async () => {
+            const { result } = renderHook(() => useAuthStore());
 
-        act(() => {
-            result.current.setAuth(mockUser, mockTokens);
-        });
+            await act(async () => {
+                await result.current.setAuth(mockUser, mockTokens);
+            });
 
-        act(() => {
-            result.current.updateUser({ username: "newusername" });
-        });
+            act(() => {
+                result.current.updateUser({ username: "newusername" });
+            });
 
-        expect(result.current.user?.username).toBe("newusername");
-        expect(result.current.user?.email).toBe(mockUser.email);
-        expect(result.current.user?.id).toBe(mockUser.id);
-    });
+            expect(result.current.user?.username).toBe("newusername");
+            expect(result.current.user?.email).toBe(mockUser.email);
+            expect(result.current.user?.id).toBe(mockUser.id);
+        }
+    );
 
     (isNativePlatform ? it : it.skip)(
         "does not update user when user is null",
@@ -152,17 +156,17 @@ describe("useAuthStore", () => {
         async () => {
             const { result } = renderHook(() => useAuthStore());
 
-            act(() => {
-                result.current.setAuth(mockUser, mockTokens);
-            });
-
             await act(async () => {
-                await new Promise((resolve) => setTimeout(resolve, 100));
+                await result.current.setAuth(mockUser, mockTokens);
             });
 
             expect(mockSetItem).toHaveBeenCalledWith(
-                "auth-storage",
-                expect.stringContaining("access-token-123")
+                "auth-access-token",
+                mockTokens.accessToken
+            );
+            expect(mockSetItem).toHaveBeenCalledWith(
+                "auth-refresh-token",
+                mockTokens.refreshToken
             );
         }
     );
@@ -179,12 +183,8 @@ describe("useAuthStore", () => {
 
             const { result } = renderHook(() => useAuthStore());
 
-            act(() => {
-                result.current.setAuth(mockUser, mockTokens);
-            });
-
             await act(async () => {
-                await new Promise((resolve) => setTimeout(resolve, 100));
+                await result.current.setAuth(mockUser, mockTokens);
             });
 
             expect(result.current.user).toEqual(mockUser);
@@ -195,24 +195,23 @@ describe("useAuthStore", () => {
     (isNativePlatform ? it : it.skip)(
         "clears SecureStore when clearing auth",
         async () => {
+            const mockDeleteItem =
+                SecureStore.deleteItemAsync as jest.MockedFunction<
+                    typeof SecureStore.deleteItemAsync
+                >;
+
             const { result } = renderHook(() => useAuthStore());
 
-            act(() => {
-                result.current.setAuth(mockUser, mockTokens);
+            await act(async () => {
+                await result.current.setAuth(mockUser, mockTokens);
             });
 
             await act(async () => {
-                await new Promise((resolve) => setTimeout(resolve, 100));
+                await result.current.clearAuth();
             });
 
-            act(() => {
-                result.current.clearAuth();
-            });
-
-            await act(async () => {
-                await new Promise((resolve) => setTimeout(resolve, 100));
-            });
-
+            expect(mockDeleteItem).toHaveBeenCalledWith("auth-access-token");
+            expect(mockDeleteItem).toHaveBeenCalledWith("auth-refresh-token");
             expect(result.current.isAuthenticated).toBe(false);
             expect(result.current.user).toBeNull();
         }
@@ -250,20 +249,12 @@ describe("useAuthStore", () => {
 
             const { result } = renderHook(() => useAuthStore());
 
-            act(() => {
-                result.current.setAuth(mockUser, mockTokens);
+            await act(async () => {
+                await result.current.setAuth(mockUser, mockTokens);
             });
 
             await act(async () => {
-                await new Promise((resolve) => setTimeout(resolve, 100));
-            });
-
-            act(() => {
-                result.current.clearAuth();
-            });
-
-            await act(async () => {
-                await new Promise((resolve) => setTimeout(resolve, 100));
+                await result.current.clearAuth();
             });
 
             expect(result.current.isAuthenticated).toBe(false);
@@ -272,11 +263,11 @@ describe("useAuthStore", () => {
 
     (isNativePlatform ? it : it.skip)(
         "updates multiple user fields at once",
-        () => {
+        async () => {
             const { result } = renderHook(() => useAuthStore());
 
-            act(() => {
-                result.current.setAuth(mockUser, mockTokens);
+            await act(async () => {
+                await result.current.setAuth(mockUser, mockTokens);
             });
 
             act(() => {
@@ -293,11 +284,11 @@ describe("useAuthStore", () => {
         }
     );
 
-    (isNativePlatform ? it : it.skip)("updates all user fields", () => {
+    (isNativePlatform ? it : it.skip)("updates all user fields", async () => {
         const { result } = renderHook(() => useAuthStore());
 
-        act(() => {
-            result.current.setAuth(mockUser, mockTokens);
+        await act(async () => {
+            await result.current.setAuth(mockUser, mockTokens);
         });
 
         const updatedUser: Partial<AuthUser> = {
@@ -320,7 +311,7 @@ describe("useAuthStore", () => {
 
     (isNativePlatform ? it : it.skip)(
         "setAuth and setAuthFromResponse produce equivalent state",
-        () => {
+        async () => {
             const { result: result1 } = renderHook(() => useAuthStore());
             const { result: result2 } = renderHook(() => useAuthStore());
 
@@ -329,9 +320,11 @@ describe("useAuthStore", () => {
                 ...mockTokens,
             };
 
-            act(() => {
-                result1.current.setAuth(mockUser, mockTokens);
-                result2.current.setAuthFromResponse(authResponse);
+            await act(async () => {
+                await Promise.all([
+                    result1.current.setAuth(mockUser, mockTokens),
+                    result2.current.setAuthFromResponse(authResponse),
+                ]);
             });
 
             expect(result1.current.user).toEqual(result2.current.user);
@@ -349,11 +342,11 @@ describe("useAuthStore", () => {
 
     (isNativePlatform ? it : it.skip)(
         "maintains tokens when updating user",
-        () => {
+        async () => {
             const { result } = renderHook(() => useAuthStore());
 
-            act(() => {
-                result.current.setAuth(mockUser, mockTokens);
+            await act(async () => {
+                await result.current.setAuth(mockUser, mockTokens);
             });
 
             act(() => {
@@ -368,11 +361,11 @@ describe("useAuthStore", () => {
 
     (isNativePlatform ? it : it.skip)(
         "handles empty user update object",
-        () => {
+        async () => {
             const { result } = renderHook(() => useAuthStore());
 
-            act(() => {
-                result.current.setAuth(mockUser, mockTokens);
+            await act(async () => {
+                await result.current.setAuth(mockUser, mockTokens);
             });
 
             act(() => {
