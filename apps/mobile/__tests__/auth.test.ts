@@ -87,7 +87,19 @@ describe("auth helpers", () => {
         fetchMock.mockResolvedValue({
             ok: false,
             status: 401,
-            text: async () => "Invalid credentials",
+            headers: {
+                get: (name: string) => {
+                    if (name === "content-type") {
+                        return "application/json";
+                    }
+                    return null;
+                },
+            },
+            json: async () => ({
+                statusCode: 401,
+                error: "Unauthorized",
+                message: "Invalid credentials",
+            }),
         });
 
         await expect(
@@ -101,6 +113,17 @@ describe("auth helpers", () => {
         fetchMock.mockResolvedValue({
             ok: false,
             status: 503,
+            headers: {
+                get: (name: string) => {
+                    if (name === "content-type") {
+                        return "application/json";
+                    }
+                    return null;
+                },
+            },
+            json: async () => {
+                throw new Error("stream error");
+            },
             text: async () => {
                 throw new Error("stream error");
             },

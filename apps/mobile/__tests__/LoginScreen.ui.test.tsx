@@ -12,6 +12,17 @@ import LoginScreen from "../components/LoginScreen";
 import { loginUser } from "../lib/auth";
 import { useAuthStore } from "../lib/store/auth";
 
+const mockPush = jest.fn();
+
+jest.mock("expo-router", () => ({
+    useRouter: () => ({
+        push: mockPush,
+        replace: jest.fn(),
+        back: jest.fn(),
+        canGoBack: jest.fn(() => true),
+    }),
+}));
+
 jest.mock("../lib/auth", () => ({
     loginUser: jest.fn(),
 }));
@@ -46,6 +57,7 @@ function renderLoginScreen() {
 
 beforeEach(() => {
     jest.clearAllMocks();
+    mockPush.mockReset();
     useAuthStoreMock.mockReturnValue(mockSetAuthFromResponse);
 });
 
@@ -440,5 +452,21 @@ describe("LoginScreen UI", () => {
                 password: "password123",
             });
         });
+    });
+
+    it("navigates to register screen when Sign Up link is pressed", () => {
+        const { getByText } = renderLoginScreen();
+
+        const signUpLink = getByText("Sign Up");
+        fireEvent.press(signUpLink);
+
+        expect(mockPush).toHaveBeenCalledWith("/register");
+    });
+
+    it("displays Sign Up link in footer", () => {
+        const { getByText } = renderLoginScreen();
+
+        expect(getByText("Don't have an account?")).toBeTruthy();
+        expect(getByText("Sign Up")).toBeTruthy();
     });
 });
