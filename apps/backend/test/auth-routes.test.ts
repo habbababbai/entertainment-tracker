@@ -331,7 +331,6 @@ describe("authRoutes", () => {
             tokenVersion: user.tokenVersion,
         });
 
-        // Simulate tokenVersion bump in DB
         prisma.user.findUnique.mockResolvedValueOnce({
             ...user,
             tokenVersion: user.tokenVersion + 1,
@@ -580,7 +579,6 @@ describe("authRoutes", () => {
 
             expect(payload.message).toBe("Reset token has expired");
 
-            // Verify expired token is cleared
             expect(prisma.user.update).toHaveBeenCalledWith({
                 where: { id: user.id },
                 data: {
@@ -621,7 +619,6 @@ describe("authRoutes", () => {
                 message: string;
             };
             expect(payload.message).toBe("Reset token has expired");
-            // isResetTokenExpired is not called when expiration is null (short-circuit)
             expect(isResetTokenExpiredMock).not.toHaveBeenCalled();
         });
     });
@@ -741,7 +738,6 @@ describe("authRoutes", () => {
                 tokenVersion: 0,
             });
 
-            // Token created with version 0, but DB has version 1
             const { accessToken } = issueTokenPair({
                 id: user.id,
                 tokenVersion: 0,

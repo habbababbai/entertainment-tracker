@@ -1,8 +1,5 @@
 import { type User } from "@prisma/client";
-import {
-    type FastifyInstance,
-    type FastifyPluginAsync,
-} from "fastify";
+import { type FastifyInstance, type FastifyPluginAsync } from "fastify";
 
 import { hashPassword, verifyPassword } from "../../lib/auth/password.js";
 import {
@@ -295,8 +292,6 @@ export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
                 where: { email },
             });
 
-            // For security, don't reveal if the email exists or not
-            // Always return success message
             if (user) {
                 const resetToken = generateResetToken();
                 const expiresAt = createResetTokenExpiration();
@@ -309,13 +304,10 @@ export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
                     },
                 });
 
-                // In production, you would send an email here
-                // For now, we'll return the token in the response (for development/testing)
-                // TODO: Remove resetToken from response in production
                 return reply.send({
                     message:
                         "If an account with that email exists, a password reset token has been generated.",
-                    resetToken, // Remove this in production
+                    resetToken,
                 });
             }
 
@@ -376,7 +368,6 @@ export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
                 !user.passwordResetTokenExpiresAt ||
                 isResetTokenExpired(user.passwordResetTokenExpiresAt)
             ) {
-                // Clear the expired token
                 await app.prisma.user.update({
                     where: { id: user.id },
                     data: {
@@ -389,8 +380,6 @@ export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
 
             const newPasswordHash = await hashPassword(newPassword);
 
-            // Update password and clear reset token
-            // Also increment tokenVersion to invalidate all existing sessions
             await app.prisma.user.update({
                 where: { id: user.id },
                 data: {
@@ -450,7 +439,6 @@ export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
         async (request, reply) => {
             const { password, email } = request.body as DeleteAccountBody;
 
-            // request.user is set by the authenticate middleware
             const user = await app.prisma.user.findUnique({
                 where: { id: request.user.id },
             });
@@ -459,12 +447,10 @@ export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
                 throw unauthorized("User not found");
             }
 
-            // Verify token version matches (token may have been invalidated)
             if (user.tokenVersion !== request.user.tokenVersion) {
                 throw unauthorized("Invalid or expired access token");
             }
 
-            // Verify password
             const passwordValid = await verifyPassword(
                 password,
                 user.passwordHash
@@ -474,12 +460,10 @@ export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
                 throw unauthorized("Invalid password");
             }
 
-            // Verify email matches
             if (user.email !== email) {
                 throw unauthorized("Email does not match");
             }
 
-            // Delete the user (cascade will handle related records)
             await app.prisma.user.delete({
                 where: { id: user.id },
             });
@@ -543,4 +527,3 @@ async function getUserForRefreshToken(
 
     return user;
 }
-
