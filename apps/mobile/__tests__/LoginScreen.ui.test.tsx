@@ -83,36 +83,46 @@ describe("LoginScreen UI", () => {
     });
 
     it("clears error when user starts typing in email field", async () => {
-        const { getByPlaceholderText, queryByText, getByText } = renderLoginScreen();
+        const { getByPlaceholderText, queryByText, getByText } =
+            renderLoginScreen();
         const emailInput = getByPlaceholderText("Enter your email");
 
         fireEvent.press(getByText("Sign In"));
 
         await waitFor(() => {
-            expect(queryByText(/Please enter both email and password/)).toBeTruthy();
+            expect(
+                queryByText(/Please enter both email and password/)
+            ).toBeTruthy();
         });
 
         fireEvent.changeText(emailInput, "new@example.com");
 
         await waitFor(() => {
-            expect(queryByText(/Please enter both email and password/)).toBeNull();
+            expect(
+                queryByText(/Please enter both email and password/)
+            ).toBeNull();
         });
     });
 
     it("clears error when user starts typing in password field", async () => {
-        const { getByPlaceholderText, queryByText, getByText } = renderLoginScreen();
+        const { getByPlaceholderText, queryByText, getByText } =
+            renderLoginScreen();
         const passwordInput = getByPlaceholderText("Enter your password");
 
         fireEvent.press(getByText("Sign In"));
 
         await waitFor(() => {
-            expect(queryByText(/Please enter both email and password/)).toBeTruthy();
+            expect(
+                queryByText(/Please enter both email and password/)
+            ).toBeTruthy();
         });
 
         fireEvent.changeText(passwordInput, "newpassword");
 
         await waitFor(() => {
-            expect(queryByText(/Please enter both email and password/)).toBeNull();
+            expect(
+                queryByText(/Please enter both email and password/)
+            ).toBeNull();
         });
     });
 
@@ -122,12 +132,15 @@ describe("LoginScreen UI", () => {
         const loginButton = getByText("Sign In");
         fireEvent.press(loginButton);
 
-        expect(await findByText("Please enter both email and password")).toBeTruthy();
+        expect(
+            await findByText("Please enter both email and password")
+        ).toBeTruthy();
         expect(loginUserMock).not.toHaveBeenCalled();
     });
 
     it("shows error when email is empty", async () => {
-        const { getByPlaceholderText, getByText, findByText } = renderLoginScreen();
+        const { getByPlaceholderText, getByText, findByText } =
+            renderLoginScreen();
 
         const passwordInput = getByPlaceholderText("Enter your password");
         fireEvent.changeText(passwordInput, "password123");
@@ -135,12 +148,15 @@ describe("LoginScreen UI", () => {
         const loginButton = getByText("Sign In");
         fireEvent.press(loginButton);
 
-        expect(await findByText("Please enter both email and password")).toBeTruthy();
+        expect(
+            await findByText("Please enter both email and password")
+        ).toBeTruthy();
         expect(loginUserMock).not.toHaveBeenCalled();
     });
 
     it("shows error when password is empty", async () => {
-        const { getByPlaceholderText, getByText, findByText } = renderLoginScreen();
+        const { getByPlaceholderText, getByText, findByText } =
+            renderLoginScreen();
 
         const emailInput = getByPlaceholderText("Enter your email");
         fireEvent.changeText(emailInput, "test@example.com");
@@ -148,7 +164,9 @@ describe("LoginScreen UI", () => {
         const loginButton = getByText("Sign In");
         fireEvent.press(loginButton);
 
-        expect(await findByText("Please enter both email and password")).toBeTruthy();
+        expect(
+            await findByText("Please enter both email and password")
+        ).toBeTruthy();
         expect(loginUserMock).not.toHaveBeenCalled();
     });
 
@@ -248,7 +266,8 @@ describe("LoginScreen UI", () => {
         loginUserMock.mockImplementationOnce(() => loginPromise);
         mockSetAuthFromResponse.mockResolvedValueOnce(undefined);
 
-        const { getByPlaceholderText, getByText, queryByText } = renderLoginScreen();
+        const { getByPlaceholderText, getByText, queryByText } =
+            renderLoginScreen();
 
         const emailInput = getByPlaceholderText("Enter your email");
         const passwordInput = getByPlaceholderText("Enter your password");
@@ -325,7 +344,8 @@ describe("LoginScreen UI", () => {
         const errorMessage = "Invalid credentials";
         loginUserMock.mockRejectedValueOnce(new Error(errorMessage));
 
-        const { getByPlaceholderText, getByText, findByText } = renderLoginScreen();
+        const { getByPlaceholderText, getByText, findByText } =
+            renderLoginScreen();
 
         const emailInput = getByPlaceholderText("Enter your email");
         const passwordInput = getByPlaceholderText("Enter your password");
@@ -367,7 +387,8 @@ describe("LoginScreen UI", () => {
     it("shows generic error message when login fails with non-Error object", async () => {
         loginUserMock.mockRejectedValueOnce("String error");
 
-        const { getByPlaceholderText, getByText, findByText } = renderLoginScreen();
+        const { getByPlaceholderText, getByText, findByText } =
+            renderLoginScreen();
 
         const emailInput = getByPlaceholderText("Enter your email");
         const passwordInput = getByPlaceholderText("Enter your password");
@@ -421,4 +442,3 @@ describe("LoginScreen UI", () => {
         });
     });
 });
-
