@@ -151,8 +151,8 @@ function WatchlistCard({ item }: { item: WatchEntry }) {
     }, [item.mediaItem.externalId, router]);
 
     const handleEditPress = useCallback(
-        (e: { stopPropagation: () => void }) => {
-            e.stopPropagation();
+        (e?: { stopPropagation?: () => void }) => {
+            e?.stopPropagation?.();
             setIsEditModalVisible(true);
         },
         []

@@ -9,17 +9,6 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { notifyManager } from "@tanstack/query-core";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import MediaDetailsScreen from "../app/media/[id]";
-import type { MediaItem } from "../lib/media";
-import { fetchMediaItem } from "../lib/media";
-import type { WatchEntry } from "../lib/watchlist";
-import {
-    addToWatchlist,
-    fetchWatchlistEntry,
-    removeFromWatchlist,
-    updateWatchlistEntry,
-} from "../lib/watchlist";
-import { useAuthStore } from "../lib/store/auth";
 
 jest.mock("@react-native-async-storage/async-storage", () => ({
     getItem: jest.fn(),
@@ -31,6 +20,66 @@ jest.mock("@react-native-async-storage/async-storage", () => ({
     getAllKeys: jest.fn(),
     multiRemove: jest.fn(),
 }));
+
+jest.mock("../lib/i18n", () => ({
+    default: {
+        isInitialized: true,
+        use: jest.fn(() => ({
+            init: jest.fn(),
+        })),
+    },
+}));
+
+jest.mock("react-i18next", () => ({
+    useTranslation: () => {
+        const actual = jest.requireActual("react-i18next");
+        const { en } = jest.requireActual("../lib/i18n/locales/en");
+        
+        // Helper function to get nested translation value
+        const getTranslation = (key: string): string => {
+            const parts = key.split(".");
+            let value: any = en;
+            for (const part of parts) {
+                if (value && typeof value === "object" && part in value) {
+                    value = value[part as keyof typeof value];
+                } else {
+                    return key;
+                }
+            }
+            return typeof value === "string" ? value : key;
+        };
+        
+        return {
+            t: (key: string, params?: Record<string, string | number>) => {
+                let translation = getTranslation(key);
+                if (params && typeof translation === "string") {
+                    Object.entries(params).forEach(([paramKey, paramValue]) => {
+                        translation = translation.replace(
+                            new RegExp(`{{${paramKey}}}`, "g"),
+                            String(paramValue)
+                        );
+                    });
+                }
+                return translation;
+            },
+            i18n: {
+                changeLanguage: jest.fn(),
+            },
+        };
+    },
+}));
+
+import MediaDetailsScreen from "../app/media/[id]";
+import type { MediaItem } from "../lib/media";
+import { fetchMediaItem } from "../lib/media";
+import type { WatchEntry } from "../lib/watchlist";
+import {
+    addToWatchlist,
+    fetchWatchlistEntry,
+    removeFromWatchlist,
+    updateWatchlistEntry,
+} from "../lib/watchlist";
+import { useAuthStore } from "../lib/store/auth";
 
 jest.mock("../lib/media", () => {
     const actual = jest.requireActual("../lib/media");
@@ -56,6 +105,39 @@ jest.mock("../lib/store/auth", () => {
     return {
         ...actual,
         useAuthStore: jest.fn(),
+    };
+});
+
+jest.mock("react-native-star-rating-widget", () => {
+    const React = require("react");
+    const { View, TouchableOpacity, Text } = require("react-native");
+
+    return function StarRating({
+        rating,
+        onChange,
+        maxStars,
+    }: {
+        rating: number;
+        onChange: (rating: number) => void;
+        maxStars: number;
+    }) {
+        return (
+            <View testID="star-rating-widget">
+                {Array.from({ length: maxStars }, (_, i) => {
+                    const starValue = i + 1;
+                    const isFilled = starValue <= rating;
+                    return (
+                        <TouchableOpacity
+                            key={starValue}
+                            testID={`star-${starValue}`}
+                            onPress={() => onChange(starValue)}
+                        >
+                            <Text>{isFilled ? "★" : "☆"}</Text>
+                        </TouchableOpacity>
+                    );
+                })}
+            </View>
+        );
     };
 });
 
@@ -429,7 +511,7 @@ describe("MediaDetailsScreen", () => {
             expect(await findByText("Save")).toBeTruthy();
         });
 
-        it("shows remove button and rating button when item is in watchlist", async () => {
+        it("shows remove button and edit button when item is in watchlist", async () => {
             fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
             fetchWatchlistEntryMock.mockResolvedValueOnce(createWatchEntry());
 
@@ -443,7 +525,7 @@ describe("MediaDetailsScreen", () => {
             );
 
             expect(await findByText("Remove")).toBeTruthy();
-            expect(await findByText("Rate")).toBeTruthy();
+            expect(await findByText("Edit")).toBeTruthy();
         });
 
         it("adds item to watchlist when save button is pressed", async () => {
@@ -533,7 +615,7 @@ describe("MediaDetailsScreen", () => {
         });
     });
 
-    describe("rating functionality", () => {
+    describe("edit watchlist functionality", () => {
         beforeEach(() => {
             useAuthStoreMock.mockImplementation(
         (selector?: (state: { isAuthenticated: boolean }) => unknown) => {
@@ -544,9 +626,31 @@ describe("MediaDetailsScreen", () => {
             });
         });
 
-        it("opens rating modal when rate button is pressed", async () => {
+        it("opens edit modal when edit button is pressed", async () => {
             fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
             fetchWatchlistEntryMock.mockResolvedValueOnce(createWatchEntry());
+
+            const { findByText, getAllByText } = renderDetailsScreen();
+
+            await waitFor(() => {
+                expect(fetchWatchlistEntryMock).toHaveBeenCalled();
+            });
+
+            const editButton = await findByText("Edit");
+            await act(async () => {
+                fireEvent.press(editButton);
+            });
+
+            expect(getAllByText("Sample Title").length).toBeGreaterThan(0);
+            expect(getAllByText("Status").length).toBeGreaterThan(0);
+            expect(getAllByText("Rating").length).toBeGreaterThan(0);
+        });
+
+        it("displays current status and rating in edit modal", async () => {
+            fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
+            fetchWatchlistEntryMock.mockResolvedValueOnce(
+                createWatchEntry({ status: "WATCHING", rating: 8 })
+            );
 
             const { findByText } = renderDetailsScreen();
 
@@ -554,180 +658,117 @@ describe("MediaDetailsScreen", () => {
                 expect(fetchWatchlistEntryMock).toHaveBeenCalled();
             });
 
-            const rateButton = await findByText("Rate");
+            const editButton = await findByText("Edit");
             await act(async () => {
-                fireEvent.press(rateButton);
+                fireEvent.press(editButton);
             });
 
-            expect(await findByText("Rate this title")).toBeTruthy();
-            expect(await findByText("Enter a rating from 1 to 10")).toBeTruthy();
+            expect(await findByText("WATCHING")).toBeTruthy();
+            expect(await findByText("8/10")).toBeTruthy();
         });
 
-        it("pre-fills rating input when item has existing rating", async () => {
+        it("allows changing status in edit modal", async () => {
             fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
             fetchWatchlistEntryMock.mockResolvedValueOnce(
-                createWatchEntry({ rating: 8 })
+                createWatchEntry({ status: "PLANNED" })
             );
 
-            const { findByText, getByPlaceholderText } = renderDetailsScreen();
+            const { findByText } = renderDetailsScreen();
 
             await waitFor(() => {
                 expect(fetchWatchlistEntryMock).toHaveBeenCalled();
             });
 
-            const rateButton = await findByText(/Rating: 8\/10/);
+            const editButton = await findByText("Edit");
             await act(async () => {
-                fireEvent.press(rateButton);
+                fireEvent.press(editButton);
             });
 
-            const input = getByPlaceholderText("1-10");
-            expect(input.props.value).toBe("8");
+            fireEvent.press(await findByText("COMPLETED"));
+
+            expect(await findByText("COMPLETED")).toBeTruthy();
         });
 
-        it("submits rating when valid rating is entered", async () => {
-            fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
-            fetchWatchlistEntryMock.mockResolvedValueOnce(createWatchEntry());
+        it("saves changes when save button is pressed", async () => {
+            const mediaItem = createMediaItem();
+            fetchMediaItemMock.mockResolvedValueOnce(mediaItem);
+            fetchWatchlistEntryMock.mockResolvedValueOnce(
+                createWatchEntry({ 
+                    status: "PLANNED", 
+                    rating: null,
+                    mediaItem: {
+                        ...createWatchEntry().mediaItem,
+                        externalId: mediaItem.externalId,
+                    },
+                })
+            );
             updateWatchlistEntryMock.mockResolvedValueOnce(
-                createWatchEntry({ rating: 9 })
+                createWatchEntry({ 
+                    status: "WATCHING", 
+                    rating: 5,
+                    mediaItem: {
+                        ...createWatchEntry().mediaItem,
+                        externalId: mediaItem.externalId,
+                    },
+                })
             );
 
-            const { findByText, getByPlaceholderText, queryClient } =
-                renderDetailsScreen();
+            const { findByText, findByTestId, queryClient } = renderDetailsScreen();
 
             await waitFor(() => {
                 expect(fetchWatchlistEntryMock).toHaveBeenCalled();
             });
 
-            const rateButton = await findByText("Rate");
+            const editButton = await findByText("Edit");
             await act(async () => {
-                fireEvent.press(rateButton);
+                fireEvent.press(editButton);
             });
 
-            const input = getByPlaceholderText("1-10");
-            fireEvent.changeText(input, "9");
+            await waitFor(async () => {
+                await expect(findByText("Status")).resolves.toBeTruthy();
+            });
 
-            const saveButton = await findByText("Save Rating");
             await act(async () => {
-                fireEvent.press(saveButton);
+                fireEvent.press(await findByText("WATCHING"));
+            });
+
+            await act(async () => {
+                fireEvent.press(await findByTestId("star-5"));
+            });
+
+            await act(async () => {
+                fireEvent.press(await findByText("Save"));
             });
 
             await waitFor(() => {
                 expect(updateWatchlistEntryMock).toHaveBeenCalledWith(
-                    "tt1234567",
-                    { rating: 9 }
+                    mediaItem.externalId,
+                    {
+                        status: "WATCHING",
+                        rating: 5,
+                    }
                 );
             });
 
             expect(queryClient.getQueryCache().findAll().length).toBeGreaterThanOrEqual(1);
         });
 
-        it("does not submit rating when rating is invalid", async () => {
+        it("closes edit modal when cancel is pressed", async () => {
             fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
             fetchWatchlistEntryMock.mockResolvedValueOnce(createWatchEntry());
 
-            const { findByText, getByPlaceholderText } = renderDetailsScreen();
+            const { findByText, getAllByText, queryByText } = renderDetailsScreen();
 
             await waitFor(() => {
                 expect(fetchWatchlistEntryMock).toHaveBeenCalled();
             });
 
-            const rateButton = await findByText("Rate");
+            const editButton = await findByText("Edit");
             await act(async () => {
-                fireEvent.press(rateButton);
+                fireEvent.press(editButton);
             });
 
-            const input = getByPlaceholderText("1-10");
-            fireEvent.changeText(input, "15");
-
-            const saveButton = await findByText("Save Rating");
-            await act(async () => {
-                fireEvent.press(saveButton);
-            });
-
-            await waitFor(() => {
-                expect(updateWatchlistEntryMock).not.toHaveBeenCalled();
-            }, { timeout: 1000 });
-        });
-
-        it("does not submit rating when rating is empty", async () => {
-            fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
-            fetchWatchlistEntryMock.mockResolvedValueOnce(createWatchEntry());
-
-            const { findByText, getByPlaceholderText } = renderDetailsScreen();
-
-            await waitFor(() => {
-                expect(fetchWatchlistEntryMock).toHaveBeenCalled();
-            });
-
-            const rateButton = await findByText("Rate");
-            await act(async () => {
-                fireEvent.press(rateButton);
-            });
-
-            const input = getByPlaceholderText("1-10");
-            fireEvent.changeText(input, "");
-
-            const saveButton = await findByText("Save Rating");
-            await act(async () => {
-                fireEvent.press(saveButton);
-            });
-
-            await waitFor(() => {
-                expect(updateWatchlistEntryMock).not.toHaveBeenCalled();
-            }, { timeout: 1000 });
-        });
-
-        it("removes rating when remove rating button is pressed", async () => {
-            fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
-            fetchWatchlistEntryMock.mockResolvedValueOnce(
-                createWatchEntry({ rating: 8 })
-            );
-            updateWatchlistEntryMock.mockResolvedValueOnce(
-                createWatchEntry({ rating: null })
-            );
-
-            const { findByText, queryClient } = renderDetailsScreen();
-
-            await waitFor(() => {
-                expect(fetchWatchlistEntryMock).toHaveBeenCalled();
-            });
-
-            const rateButton = await findByText(/Rating: 8\/10/);
-            await act(async () => {
-                fireEvent.press(rateButton);
-            });
-
-            const removeButton = await findByText("Remove Rating");
-            await act(async () => {
-                fireEvent.press(removeButton);
-            });
-
-            await waitFor(() => {
-                expect(updateWatchlistEntryMock).toHaveBeenCalledWith(
-                    "tt1234567",
-                    { rating: null }
-                );
-            });
-
-            expect(queryClient.getQueryCache().findAll().length).toBeGreaterThanOrEqual(1);
-        });
-
-        it("closes rating modal when cancel button is pressed", async () => {
-            fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
-            fetchWatchlistEntryMock.mockResolvedValueOnce(createWatchEntry());
-
-            const { findByText, queryByText } = renderDetailsScreen();
-
-            await waitFor(() => {
-                expect(fetchWatchlistEntryMock).toHaveBeenCalled();
-            });
-
-            const rateButton = await findByText("Rate");
-            await act(async () => {
-                fireEvent.press(rateButton);
-            });
-
-            expect(await findByText("Rate this title")).toBeTruthy();
+            expect(getAllByText("Sample Title").length).toBeGreaterThan(0);
 
             const cancelButton = await findByText("Cancel");
             await act(async () => {
@@ -735,53 +776,23 @@ describe("MediaDetailsScreen", () => {
             });
 
             await waitFor(() => {
-                expect(queryByText("Rate this title")).toBeNull();
+                expect(queryByText("Status")).toBeNull();
             });
         });
 
-        it("closes rating modal when onRequestClose is called", async () => {
+        it("does not show edit button when item is not in watchlist", async () => {
             fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
-            fetchWatchlistEntryMock.mockResolvedValueOnce(createWatchEntry());
-
-            const { findByText, queryByText, UNSAFE_getByType } = renderDetailsScreen();
-
-            await waitFor(() => {
-                expect(fetchWatchlistEntryMock).toHaveBeenCalled();
-            });
-
-            const rateButton = await findByText("Rate");
-            await act(async () => {
-                fireEvent.press(rateButton);
-            });
-
-            expect(await findByText("Rate this title")).toBeTruthy();
-
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const { Modal } = require("react-native");
-            const modal = UNSAFE_getByType(Modal);
-            
-            await act(async () => {
-                fireEvent(modal, "requestClose");
-            });
-
-            await waitFor(() => {
-                expect(queryByText("Rate this title")).toBeNull();
-            });
-        });
-
-        it("shows existing rating in rate button when item has rating", async () => {
-            fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
-            fetchWatchlistEntryMock.mockResolvedValueOnce(
-                createWatchEntry({ rating: 7 })
+            fetchWatchlistEntryMock.mockRejectedValueOnce(
+                new Error("Item not found in watchlist")
             );
 
-            const { findByText } = renderDetailsScreen();
+            const { queryByText } = renderDetailsScreen();
 
             await waitFor(() => {
                 expect(fetchWatchlistEntryMock).toHaveBeenCalled();
             });
 
-            expect(await findByText(/Rating: 7\/10/)).toBeTruthy();
+            expect(queryByText("Edit")).toBeNull();
         });
     });
 });

@@ -27,7 +27,9 @@ const projects = presetProjects.map(({ watchPlugins, ...projectConfig }) => {
             "<rootDir>/__tests__/.*\\.ui\\.test\\.[jt]sx?$",
             "<rootDir>/__tests__/store-auth\\.test\\.[jt]sx?$",
             "<rootDir>/__tests__/store-home\\.test\\.[jt]sx?$",
-            "<rootDir>/__tests__/store-theme\\.test\\.[jt]sx?$"
+            "<rootDir>/__tests__/store-theme\\.test\\.[jt]sx?$",
+            "<rootDir>/__tests__/StarRating\\.test\\.[jt]sx?$",
+            "<rootDir>/__tests__/EditWatchlistEntryModal\\.test\\.[jt]sx?$"
         );
     }
 
