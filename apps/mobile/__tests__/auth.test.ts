@@ -1,4 +1,4 @@
-import type { AuthResponse, LoginRequest, RegisterRequest } from "../lib/types";
+import type { AuthResponse, RegisterRequest } from "../lib/types";
 
 const originalFetch = globalThis.fetch;
 const fetchMock = jest.fn();

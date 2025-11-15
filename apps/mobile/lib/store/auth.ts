@@ -4,7 +4,7 @@ import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import type { AuthUser, AuthTokens, AuthResponse } from "../types";
-import { refreshTokens } from "../auth";
+import { refreshTokens } from "../api/refresh-tokens";
 import { isTestEnv } from "../utils/env";
 import { isTokenExpired, isTokenExpiringSoon } from "../utils/jwt";
 

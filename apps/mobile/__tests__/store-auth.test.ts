@@ -26,7 +26,7 @@ jest.mock("@react-native-async-storage/async-storage", () => ({
     multiRemove: jest.fn(),
 }));
 
-jest.mock("../lib/auth", () => ({
+jest.mock("../lib/api/refresh-tokens", () => ({
     refreshTokens: jest.fn(),
 }));
 
@@ -70,12 +70,14 @@ const mockTokens: AuthTokens = {
 };
 
 const mockRefreshTokens = jest.fn() as jest.MockedFunction<
-    typeof import("../lib/auth").refreshTokens
+    typeof import("../lib/api/refresh-tokens").refreshTokens
 >;
 
-jest.mock("../lib/auth", () => ({
+jest.mock("../lib/api/refresh-tokens", () => ({
     refreshTokens: (
-        ...args: Parameters<typeof import("../lib/auth").refreshTokens>
+        ...args: Parameters<
+            typeof import("../lib/api/refresh-tokens").refreshTokens
+        >
     ) => mockRefreshTokens(...args),
 }));
 

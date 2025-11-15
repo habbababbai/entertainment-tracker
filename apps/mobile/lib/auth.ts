@@ -91,15 +91,7 @@ export async function loginUser(request: LoginRequest): Promise<AuthResponse> {
     return postJson("/api/v1/auth/login", request, parseAuthResponse);
 }
 
-export async function refreshTokens(
-    refreshToken: string
-): Promise<AuthResponse> {
-    return postJson(
-        "/api/v1/auth/refresh",
-        { refreshToken },
-        parseAuthResponse
-    );
-}
+export { refreshTokens } from "./api/refresh-tokens";
 
 export async function logoutUser(refreshToken: string): Promise<void> {
     await postJson(

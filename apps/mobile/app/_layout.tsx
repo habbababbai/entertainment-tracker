@@ -1,5 +1,5 @@
 import { Slot } from "expo-router";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -9,7 +9,6 @@ import { enableScreens } from "react-native-screens";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import "../lib/i18n";
-import { useAuthStore } from "../lib/store/auth";
 import { useThemeStore } from "../lib/store/theme";
 
 enableScreens(false);

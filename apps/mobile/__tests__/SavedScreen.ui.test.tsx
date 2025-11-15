@@ -142,7 +142,8 @@ function createWatchEntry(overrides: Partial<WatchEntry> = {}): WatchEntry {
 beforeEach(() => {
     fetchWatchlistMock.mockReset();
     mockPush.mockReset();
-    useAuthStoreMock.mockImplementation((selector: any) => {
+    useAuthStoreMock.mockImplementation(
+        (selector?: (state: { isAuthenticated: boolean }) => unknown) => {
         if (typeof selector === "function") {
             return selector({ isAuthenticated: true });
         }
@@ -167,7 +168,8 @@ afterEach(async () => {
 
 describe("SavedScreen UI", () => {
     it("shows login screen when user is not authenticated", () => {
-        useAuthStoreMock.mockImplementation((selector: any) => {
+        useAuthStoreMock.mockImplementation(
+        (selector?: (state: { isAuthenticated: boolean }) => unknown) => {
             if (typeof selector === "function") {
                 return selector({ isAuthenticated: false });
             }
@@ -311,6 +313,7 @@ describe("SavedScreen UI", () => {
             expect(getByText("No saved items yet.")).toBeTruthy();
         });
 
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { RefreshControl } = require("react-native");
         const refreshControl = UNSAFE_getByType(RefreshControl);
 
@@ -340,7 +343,7 @@ describe("SavedScreen UI", () => {
 
         fetchWatchlistMock.mockResolvedValue(createWatchlistResponse([entry]));
 
-        const { findByText, getByTestId } = renderSavedTab();
+        const { findByText } = renderSavedTab();
 
         const card = await findByText("Test Movie");
         fireEvent.press(card);
