@@ -126,9 +126,7 @@ function SavedScreen() {
                     ItemSeparatorComponent={() => (
                         <View style={styles.separator} />
                     )}
-                    renderItem={({ item }) => (
-                        <WatchlistCard item={item} />
-                    )}
+                    renderItem={({ item }) => <WatchlistCard item={item} />}
                     ListEmptyComponent={listEmptyComponent}
                 />
             </View>
