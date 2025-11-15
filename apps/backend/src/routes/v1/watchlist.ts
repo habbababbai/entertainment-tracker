@@ -5,12 +5,8 @@ import type {
 } from "@entertainment-tracker/contracts";
 
 import { conflict, notFound } from "../../lib/http-errors.js";
-import {
-    mapOmdbDetail,
-} from "../../lib/omdb/index.js";
-import {
-    type OmdbDetailResponse,
-} from "../../types/omdb.js";
+import { mapOmdbDetail } from "../../lib/omdb/index.js";
+import { type OmdbDetailResponse } from "../../types/omdb.js";
 import { requestOmdb } from "../../lib/omdb/index.js";
 
 const watchEntrySchema = {
@@ -68,7 +64,6 @@ const errorResponseSchema = {
     },
     required: ["statusCode", "error", "message"],
 } as const;
-
 
 type AddWatchlistBody = AddWatchlistRequest;
 type UpdateWatchlistBody = UpdateWatchlistRequest;
@@ -194,7 +189,10 @@ export const watchlistRoutes: FastifyPluginAsync = async (
             const { mediaItemId } = request.body as AddWatchlistBody;
             const userId = request.user.id;
 
-            const internalMediaItemId = await resolveMediaItemId(app, mediaItemId);
+            const internalMediaItemId = await resolveMediaItemId(
+                app,
+                mediaItemId
+            );
 
             const existingEntry = await app.prisma.watchEntry.findUnique({
                 where: {
@@ -269,7 +267,10 @@ export const watchlistRoutes: FastifyPluginAsync = async (
             const { mediaItemId } = request.params as { mediaItemId: string };
             const userId = request.user.id;
 
-            const internalMediaItemId = await resolveMediaItemId(app, mediaItemId);
+            const internalMediaItemId = await resolveMediaItemId(
+                app,
+                mediaItemId
+            );
 
             const watchEntry = await app.prisma.watchEntry.findUnique({
                 where: {
@@ -418,7 +419,10 @@ export const watchlistRoutes: FastifyPluginAsync = async (
             const userId = request.user.id;
             const body = request.body as UpdateWatchlistBody;
 
-            const internalMediaItemId = await resolveMediaItemId(app, mediaItemId);
+            const internalMediaItemId = await resolveMediaItemId(
+                app,
+                mediaItemId
+            );
 
             const watchEntry = await app.prisma.watchEntry.findUnique({
                 where: {
@@ -524,7 +528,10 @@ export const watchlistRoutes: FastifyPluginAsync = async (
             const { mediaItemId } = request.params as { mediaItemId: string };
             const userId = request.user.id;
 
-            const internalMediaItemId = await resolveMediaItemId(app, mediaItemId);
+            const internalMediaItemId = await resolveMediaItemId(
+                app,
+                mediaItemId
+            );
 
             const watchEntry = await app.prisma.watchEntry.findUnique({
                 where: {
