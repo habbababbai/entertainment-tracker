@@ -100,7 +100,8 @@ beforeEach(() => {
     mockToggleTheme.mockImplementation(() => {});
     mockGetSystemTheme.mockReturnValue("light");
 
-    useThemeStoreMock.mockImplementation((selector?: any) => {
+    useThemeStoreMock.mockImplementation(
+        (selector?: (state: ReturnType<typeof useThemeStoreMock>) => unknown) => {
         const state = {
             themeMode: currentThemeMode,
             setThemeMode: mockSetThemeMode,
@@ -648,7 +649,7 @@ describe("SettingsTab UI", () => {
             replace: jest.fn(),
             back: jest.fn(),
             canGoBack: jest.fn(() => true),
-        } as any);
+        } as Parameters<typeof mockUseRouter>[0]);
 
         useAuthStoreMock.mockImplementation((selector) => {
             if (typeof selector === "function") {

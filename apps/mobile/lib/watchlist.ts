@@ -10,6 +10,7 @@ import {
 } from "@entertainment-tracker/contracts";
 import { resolveApiBaseUrl } from "./media";
 import { useAuthStore } from "./store/auth";
+import { isTokenExpiringSoon } from "./utils/jwt";
 
 const API_BASE_URL = resolveApiBaseUrl();
 
@@ -17,68 +18,50 @@ function getAccessToken(): string | null {
     return useAuthStore.getState().accessToken;
 }
 
-// Re-export types for convenience
-export type {
-    WatchEntry,
-    WatchlistResponse,
-    AddWatchlistRequest,
-    UpdateWatchlistRequest,
-} from "@entertainment-tracker/contracts";
+class NetworkError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "NetworkError";
+    }
+}
 
-async function authenticatedFetch<T>(
-    path: string,
-    options: RequestInit,
+class AuthenticationError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "AuthenticationError";
+    }
+}
+
+async function extractErrorMessage(
+    response: Response
+): Promise<string | undefined> {
+    try {
+        const contentType = response.headers.get("content-type");
+        if (contentType?.includes("application/json")) {
+            const errorData = await response.json();
+            if (
+                typeof errorData === "object" &&
+                errorData !== null &&
+                "message" in errorData &&
+                typeof errorData.message === "string"
+            ) {
+                return errorData.message;
+            }
+        } else {
+            const text = await response.text();
+            return text.trim() || undefined;
+        }
+    } catch {
+        return undefined;
+    }
+}
+
+async function parseResponse<T>(
+    response: Response,
     parser: (value: unknown) => T
 ): Promise<T> {
-    const accessToken = getAccessToken();
-
-    if (!accessToken) {
-        throw new Error("Not authenticated");
-    }
-
-    const url = new URL(path, API_BASE_URL);
-
-    const hasBody = options.body !== undefined && options.body !== null;
-    const headers: Record<string, string> = {
-        Authorization: `Bearer ${accessToken}`,
-        ...(options.headers as Record<string, string> | undefined),
-    };
-
-    if (hasBody) {
-        headers["Content-Type"] = "application/json";
-    }
-
-    const response = await fetch(url.toString(), {
-        ...options,
-        headers,
-    });
-
-    if (response.status === 401) {
-        throw new Error("Authentication required");
-    }
-
     if (!response.ok) {
-        let message: string | undefined;
-        try {
-            const contentType = response.headers.get("content-type");
-            if (contentType?.includes("application/json")) {
-                const errorData = await response.json();
-                if (
-                    typeof errorData === "object" &&
-                    errorData !== null &&
-                    "message" in errorData &&
-                    typeof errorData.message === "string"
-                ) {
-                    message = errorData.message;
-                }
-            } else {
-                const text = await response.text();
-                message = text.trim() || undefined;
-            }
-        } catch {
-            message = undefined;
-        }
-
+        const message = await extractErrorMessage(response);
         throw new Error(
             message || `Request failed with status ${response.status}`
         );
@@ -102,6 +85,108 @@ async function authenticatedFetch<T>(
         throw new Error(`Malformed response: ${String(detailSource)}`);
     }
 }
+
+async function authenticatedFetch<T>(
+    path: string,
+    options: RequestInit,
+    parser: (value: unknown) => T,
+    retryOn401 = true,
+    maxRetries = 1
+): Promise<T> {
+    const url = new URL(path, API_BASE_URL).toString();
+
+    let accessToken = getAccessToken();
+    if (!accessToken) {
+        throw new AuthenticationError("Not authenticated");
+    }
+
+    const hasBody = options.body !== undefined && options.body !== null;
+    let headers: Record<string, string> = {
+        Authorization: `Bearer ${accessToken}`,
+        ...(options.headers as Record<string, string> | undefined),
+    };
+
+    if (hasBody) {
+        headers["Content-Type"] = "application/json";
+    }
+
+    if (isTokenExpiringSoon(accessToken, 60) && retryOn401) {
+        await useAuthStore.getState().refreshAccessToken();
+        accessToken = getAccessToken();
+        if (accessToken) {
+            headers.Authorization = `Bearer ${accessToken}`;
+        }
+    }
+
+    let retryCount = 0;
+    let lastError: Error | null = null;
+
+    while (retryCount <= maxRetries) {
+        try {
+            const response = await fetch(url, {
+                ...options,
+                headers,
+            });
+
+            if (
+                response.status === 401 &&
+                retryOn401 &&
+                retryCount < maxRetries
+            ) {
+                const refreshSuccess = await useAuthStore
+                    .getState()
+                    .refreshAccessToken();
+
+                if (!refreshSuccess) {
+                    throw new AuthenticationError("Authentication required");
+                }
+
+                const newAccessToken = getAccessToken();
+                if (!newAccessToken) {
+                    throw new AuthenticationError("Authentication required");
+                }
+
+                headers = {
+                    ...headers,
+                    Authorization: `Bearer ${newAccessToken}`,
+                };
+
+                retryCount++;
+                continue;
+            }
+
+            return parseResponse(response, parser);
+        } catch (error) {
+            if (error instanceof AuthenticationError) {
+                throw error;
+            }
+
+            if (error instanceof TypeError && error.message.includes("fetch")) {
+                throw new NetworkError(
+                    error.message || "Network request failed"
+                );
+            }
+
+            lastError =
+                error instanceof Error ? error : new Error(String(error));
+
+            if (retryCount >= maxRetries) {
+                throw lastError;
+            }
+
+            retryCount++;
+        }
+    }
+
+    throw lastError || new Error("Request failed");
+}
+
+export type {
+    WatchEntry,
+    WatchlistResponse,
+    AddWatchlistRequest,
+    UpdateWatchlistRequest,
+} from "@entertainment-tracker/contracts";
 
 function parseWatchEntry(value: unknown): WatchEntry {
     return watchEntrySchema.parse(value);

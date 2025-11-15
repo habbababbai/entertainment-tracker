@@ -227,7 +227,8 @@ afterEach(async () => {
     mockUseLocalSearchParams.mockReset();
     mockUseLocalSearchParams.mockReturnValue({ id: "tt1234567" });
     useAuthStoreMock.mockReset();
-    useAuthStoreMock.mockImplementation((selector: any) => {
+    useAuthStoreMock.mockImplementation(
+        (selector?: (state: { isAuthenticated: boolean }) => unknown) => {
         if (typeof selector === "function") {
             return selector({ isAuthenticated: false });
         }
@@ -372,7 +373,8 @@ describe("MediaDetailsScreen", () => {
 
     describe("watchlist functionality", () => {
         beforeEach(() => {
-            useAuthStoreMock.mockImplementation((selector: any) => {
+            useAuthStoreMock.mockImplementation(
+        (selector?: (state: { isAuthenticated: boolean }) => unknown) => {
                 if (typeof selector === "function") {
                     return selector({ isAuthenticated: true });
                 }
@@ -381,7 +383,8 @@ describe("MediaDetailsScreen", () => {
         });
 
         it("does not show watchlist actions when user is not authenticated", async () => {
-            useAuthStoreMock.mockImplementation((selector: any) => {
+            useAuthStoreMock.mockImplementation(
+        (selector?: (state: { isAuthenticated: boolean }) => unknown) => {
                 if (typeof selector === "function") {
                     return selector({ isAuthenticated: false });
                 }
@@ -532,7 +535,8 @@ describe("MediaDetailsScreen", () => {
 
     describe("rating functionality", () => {
         beforeEach(() => {
-            useAuthStoreMock.mockImplementation((selector: any) => {
+            useAuthStoreMock.mockImplementation(
+        (selector?: (state: { isAuthenticated: boolean }) => unknown) => {
                 if (typeof selector === "function") {
                     return selector({ isAuthenticated: true });
                 }
@@ -752,6 +756,7 @@ describe("MediaDetailsScreen", () => {
 
             expect(await findByText("Rate this title")).toBeTruthy();
 
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
             const { Modal } = require("react-native");
             const modal = UNSAFE_getByType(Modal);
             

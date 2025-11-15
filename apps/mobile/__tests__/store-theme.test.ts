@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Platform, Appearance } from "react-native";
+import { Platform } from "react-native";
 
 import { useThemeStore, type ThemeMode } from "../lib/store/theme";
 
@@ -26,7 +26,11 @@ const mockSetItem = AsyncStorage.setItem as jest.MockedFunction<
 
 // Mock Appearance.getColorScheme
 const mockGetColorScheme = jest.fn(() => "light" as const);
-jest.spyOn(require("react-native").Appearance, "getColorScheme").mockImplementation(mockGetColorScheme);
+jest.spyOn(
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require("react-native").Appearance,
+    "getColorScheme"
+).mockImplementation(mockGetColorScheme);
 
 describe("useThemeStore", () => {
     beforeEach(async () => {

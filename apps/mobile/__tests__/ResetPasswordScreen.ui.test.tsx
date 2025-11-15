@@ -88,7 +88,13 @@ beforeEach(() => {
     mockReplace.mockReset();
     mockBack.mockReset();
     mockCanGoBack.mockReturnValue(true);
-    useAuthStoreMock.mockImplementation((selector: any) => {
+    useAuthStoreMock.mockImplementation(
+        (
+            selector: (state: {
+                user: unknown;
+                setAuthFromResponse: unknown;
+            }) => unknown
+        ) => {
         const mockState = {
             user: mockUser,
             setAuthFromResponse: mockSetAuthFromResponse,

@@ -5,6 +5,7 @@ import { Platform } from "react-native";
 
 import { useAuthStore } from "../lib/store/auth";
 import type { AuthUser, AuthTokens, AuthResponse } from "../lib/types";
+import { createJWT } from "./test-utils/jwt";
 
 const isNativePlatform = Platform.OS === "ios" || Platform.OS === "android";
 
@@ -13,6 +14,36 @@ jest.mock("expo-secure-store", () => ({
     setItemAsync: jest.fn(),
     deleteItemAsync: jest.fn(),
 }));
+
+jest.mock("@react-native-async-storage/async-storage", () => ({
+    getItem: jest.fn(),
+    setItem: jest.fn(),
+    removeItem: jest.fn(),
+    multiGet: jest.fn(),
+    multiSet: jest.fn(),
+    clear: jest.fn(),
+    getAllKeys: jest.fn(),
+    multiRemove: jest.fn(),
+}));
+
+jest.mock("../lib/api/refresh-tokens", () => ({
+    refreshTokens: jest.fn(),
+}));
+
+const mockIsTokenExpired = jest.fn();
+const mockIsTokenExpiringSoon = jest.fn();
+
+jest.mock("../lib/utils/jwt", () => {
+    const actual = jest.requireActual("../lib/utils/jwt");
+    return {
+        ...actual,
+        isTokenExpired: (...args: Parameters<typeof actual.isTokenExpired>) =>
+            mockIsTokenExpired(...args),
+        isTokenExpiringSoon: (
+            ...args: Parameters<typeof actual.isTokenExpiringSoon>
+        ) => mockIsTokenExpiringSoon(...args),
+    };
+});
 
 jest.mock("../lib/utils/env", () => ({
     isTestEnv: jest.fn(() => true),
@@ -38,16 +69,41 @@ const mockTokens: AuthTokens = {
     refreshToken: "refresh-token-456",
 };
 
+const mockRefreshTokens = jest.fn() as jest.MockedFunction<
+    typeof import("../lib/api/refresh-tokens").refreshTokens
+>;
+
+jest.mock("../lib/api/refresh-tokens", () => ({
+    refreshTokens: (
+        ...args: Parameters<
+            typeof import("../lib/api/refresh-tokens").refreshTokens
+        >
+    ) => mockRefreshTokens(...args),
+}));
+
 describe("useAuthStore", () => {
     beforeEach(async () => {
         if (!isNativePlatform) {
             return;
         }
+
+        const actualJwt = jest.requireActual("../lib/utils/jwt");
+
         jest.clearAllMocks();
         mockGetItem.mockResolvedValue(null);
         mockSetItem.mockResolvedValue(undefined);
+
+        mockIsTokenExpired.mockImplementation((token: string) =>
+            actualJwt.isTokenExpired(token)
+        );
+        mockIsTokenExpiringSoon.mockImplementation(
+            (token: string, bufferSeconds?: number) =>
+                actualJwt.isTokenExpiringSoon(token, bufferSeconds)
+        );
+
         await act(async () => {
             await useAuthStore.getState().clearAuth();
+            useAuthStore.setState({ _refreshPromise: null });
         });
     });
 
@@ -662,6 +718,215 @@ describe("useAuthStore", () => {
                 );
 
                 consoleWarnSpy.mockRestore();
+            }
+        );
+    });
+
+    describe("refreshAccessToken", () => {
+        (isNativePlatform ? it : it.skip)(
+            "returns false when refresh token is missing",
+            async () => {
+                const { result } = renderHook(() => useAuthStore());
+
+                await act(async () => {
+                    const success = await result.current.refreshAccessToken();
+                    expect(success).toBe(false);
+                });
+            }
+        );
+
+        (isNativePlatform ? it : it.skip)(
+            "returns true when token is valid and not expiring soon",
+            async () => {
+                const validToken = createJWT({
+                    exp: Math.floor(Date.now() / 1000) + 3600,
+                });
+
+                const { result } = renderHook(() => useAuthStore());
+
+                await act(async () => {
+                    await result.current.setAuth(mockUser, {
+                        accessToken: validToken,
+                        refreshToken: "refresh-token-456",
+                    });
+                });
+
+                await act(async () => {
+                    const success = await result.current.refreshAccessToken();
+                    expect(success).toBe(true);
+                });
+
+                expect(mockRefreshTokens).not.toHaveBeenCalled();
+            }
+        );
+
+        (isNativePlatform ? it : it.skip)(
+            "refreshes token when token is expired",
+            async () => {
+                const expiredToken = createJWT({
+                    exp: Math.floor(Date.now() / 1000) - 3600,
+                });
+
+                const newTokens: AuthResponse = {
+                    user: mockUser,
+                    accessToken: createJWT({
+                        exp: Math.floor(Date.now() / 1000) + 3600,
+                    }),
+                    refreshToken: "new-refresh-token",
+                };
+
+                mockIsTokenExpired.mockReturnValue(true);
+                mockIsTokenExpiringSoon.mockReturnValue(false);
+                mockRefreshTokens.mockResolvedValue(newTokens);
+
+                const { result } = renderHook(() => useAuthStore());
+
+                await act(async () => {
+                    await result.current.setAuth(mockUser, {
+                        accessToken: expiredToken,
+                        refreshToken: "refresh-token-456",
+                    });
+                });
+
+                await act(async () => {
+                    const success = await result.current.refreshAccessToken();
+                    expect(success).toBe(true);
+                });
+
+                expect(mockRefreshTokens).toHaveBeenCalledWith(
+                    "refresh-token-456"
+                );
+                expect(mockRefreshTokens).toHaveBeenCalledTimes(1);
+                expect(result.current.accessToken).toBe(newTokens.accessToken);
+                expect(result.current.refreshToken).toBe(
+                    newTokens.refreshToken
+                );
+            }
+        );
+
+        (isNativePlatform ? it : it.skip)(
+            "refreshes token when token is expiring soon",
+            async () => {
+                const expiringToken = createJWT({
+                    exp: Math.floor(Date.now() / 1000) + 30,
+                });
+
+                const newTokens: AuthResponse = {
+                    user: mockUser,
+                    accessToken: createJWT({
+                        exp: Math.floor(Date.now() / 1000) + 3600,
+                    }),
+                    refreshToken: "new-refresh-token",
+                };
+
+                mockRefreshTokens.mockResolvedValue(newTokens);
+
+                const { result } = renderHook(() => useAuthStore());
+
+                await act(async () => {
+                    await result.current.setAuth(mockUser, {
+                        accessToken: expiringToken,
+                        refreshToken: "refresh-token-456",
+                    });
+                });
+
+                mockIsTokenExpired.mockReturnValue(false);
+                mockIsTokenExpiringSoon.mockReturnValue(true);
+
+                await act(async () => {
+                    const success = await result.current.refreshAccessToken();
+                    expect(success).toBe(true);
+                });
+
+                expect(mockRefreshTokens).toHaveBeenCalledWith(
+                    "refresh-token-456"
+                );
+                expect(mockRefreshTokens).toHaveBeenCalledTimes(1);
+            }
+        );
+
+        (isNativePlatform ? it : it.skip)(
+            "prevents concurrent refresh attempts",
+            async () => {
+                const expiredToken = createJWT({
+                    exp: Math.floor(Date.now() / 1000) - 3600,
+                });
+
+                const newTokens: AuthResponse = {
+                    user: mockUser,
+                    accessToken: createJWT({
+                        exp: Math.floor(Date.now() / 1000) + 3600,
+                    }),
+                    refreshToken: "new-refresh-token",
+                };
+
+                let resolveRefresh: (value: AuthResponse) => void;
+                const refreshPromise = new Promise<AuthResponse>((resolve) => {
+                    resolveRefresh = resolve;
+                });
+
+                mockIsTokenExpired.mockReturnValue(true);
+                mockIsTokenExpiringSoon.mockReturnValue(false);
+                mockRefreshTokens.mockReturnValue(refreshPromise);
+
+                const { result } = renderHook(() => useAuthStore());
+
+                await act(async () => {
+                    await result.current.setAuth(mockUser, {
+                        accessToken: expiredToken,
+                        refreshToken: "refresh-token-456",
+                    });
+                });
+
+                const promise1 = result.current.refreshAccessToken();
+                const promise2 = result.current.refreshAccessToken();
+
+                expect(mockRefreshTokens).toHaveBeenCalledTimes(1);
+
+                await act(async () => {
+                    resolveRefresh!(newTokens);
+                    const [result1, result2] = await Promise.all([
+                        promise1,
+                        promise2,
+                    ]);
+                    expect(result1).toBe(true);
+                    expect(result2).toBe(true);
+                    expect(result1).toBe(result2);
+                });
+            }
+        );
+
+        (isNativePlatform ? it : it.skip)(
+            "clears auth when refresh fails",
+            async () => {
+                const expiredToken = createJWT({
+                    exp: Math.floor(Date.now() / 1000) - 3600,
+                });
+
+                mockIsTokenExpired.mockReturnValue(true);
+                mockIsTokenExpiringSoon.mockReturnValue(false);
+                mockRefreshTokens.mockRejectedValue(
+                    new Error("Refresh token invalid")
+                );
+
+                const { result } = renderHook(() => useAuthStore());
+
+                await act(async () => {
+                    await result.current.setAuth(mockUser, {
+                        accessToken: expiredToken,
+                        refreshToken: "refresh-token-456",
+                    });
+                });
+
+                await act(async () => {
+                    const success = await result.current.refreshAccessToken();
+                    expect(success).toBe(false);
+                });
+
+                expect(result.current.isAuthenticated).toBe(false);
+                expect(result.current.user).toBeNull();
+                expect(result.current.accessToken).toBeNull();
+                expect(result.current.refreshToken).toBeNull();
             }
         );
     });

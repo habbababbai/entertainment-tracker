@@ -47,8 +47,13 @@ jest.mock("../lib/store/auth", () => ({
     useAuthStore: {
         getState: jest.fn(() => ({
             accessToken: "test-access-token",
+            refreshAccessToken: jest.fn().mockResolvedValue(true),
         })),
     },
+}));
+
+jest.mock("../lib/utils/jwt", () => ({
+    isTokenExpiringSoon: jest.fn(() => false),
 }));
 
 async function loadModule(accessToken: string | null = "test-access-token") {
@@ -57,8 +62,12 @@ async function loadModule(accessToken: string | null = "test-access-token") {
     authModule.useAuthStore = {
         getState: jest.fn(() => ({
             accessToken,
+            refreshAccessToken: jest.fn().mockResolvedValue(true),
         })),
     };
+
+    const jwtModule = jest.requireMock("../lib/utils/jwt");
+    jwtModule.isTokenExpiringSoon.mockReturnValue(false);
 
     return jest.requireActual<typeof import("../lib/watchlist")>(
         "../lib/watchlist"
@@ -520,6 +529,273 @@ describe("watchlist helpers", () => {
                     get: () => null,
                 },
                 text: async () => "",
+            });
+
+            await expect(fetchWatchlist()).rejects.toThrow(
+                "Request failed with status 500"
+            );
+        });
+
+        it("handles error when extracting error message fails", async () => {
+            const { fetchWatchlist } = await loadModule();
+
+            fetchMock.mockResolvedValue({
+                ok: false,
+                status: 500,
+                headers: {
+                    get: () => "application/json",
+                },
+                json: async () => {
+                    throw new Error("JSON parse error");
+                },
+                text: async () => {
+                    throw new Error("Text parse error");
+                },
+            });
+
+            await expect(fetchWatchlist()).rejects.toThrow(
+                "Request failed with status 500"
+            );
+        });
+
+        it("proactively refreshes token when expiring soon", async () => {
+            jest.resetModules();
+            const jwtModule = jest.requireMock("../lib/utils/jwt");
+            const authModule = jest.requireMock("../lib/store/auth");
+            const mockRefreshAccessToken = jest
+                .fn()
+                .mockResolvedValue(true);
+
+            const expiringToken = "expiring-token";
+            const newToken = "new-token";
+
+            let callCount = 0;
+            authModule.useAuthStore = {
+                getState: jest.fn(() => {
+                    callCount++;
+                    if (callCount === 1) {
+                        return {
+                            accessToken: expiringToken,
+                            refreshAccessToken: mockRefreshAccessToken,
+                        };
+                    }
+                    if (callCount === 2) {
+                        return {
+                            accessToken: expiringToken,
+                            refreshAccessToken: mockRefreshAccessToken,
+                        };
+                    }
+                    return {
+                        accessToken: newToken,
+                        refreshAccessToken: mockRefreshAccessToken,
+                    };
+                }),
+            };
+            jwtModule.isTokenExpiringSoon.mockReturnValue(true);
+
+            const watchlistModule = jest.requireActual<typeof import("../lib/watchlist")>(
+                "../lib/watchlist"
+            );
+
+            const response = buildWatchlistResponse();
+
+            fetchMock.mockResolvedValue({
+                ok: true,
+                json: async () => response,
+            });
+
+            await watchlistModule.fetchWatchlist();
+
+            expect(mockRefreshAccessToken).toHaveBeenCalledTimes(1);
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+        });
+
+        it("throws AuthenticationError when token refresh fails after 401", async () => {
+            jest.resetModules();
+            const authModule = jest.requireMock("../lib/store/auth");
+            const mockRefreshAccessToken = jest
+                .fn()
+                .mockResolvedValue(false);
+
+            authModule.useAuthStore = {
+                getState: jest
+                    .fn()
+                    .mockReturnValueOnce({
+                        accessToken: "token",
+                        refreshAccessToken: mockRefreshAccessToken,
+                    })
+                    .mockReturnValueOnce({
+                        accessToken: "token",
+                        refreshAccessToken: mockRefreshAccessToken,
+                    }),
+            };
+
+            const watchlistModule = jest.requireActual<typeof import("../lib/watchlist")>(
+                "../lib/watchlist"
+            );
+
+            fetchMock.mockResolvedValueOnce({
+                ok: false,
+                status: 401,
+                headers: {
+                    get: () => "application/json",
+                },
+                json: async () => ({
+                    message: "Unauthorized",
+                }),
+            });
+
+            await expect(watchlistModule.fetchWatchlist()).rejects.toThrow(
+                "Authentication required"
+            );
+            expect(mockRefreshAccessToken).toHaveBeenCalledTimes(1);
+        });
+
+        it("throws AuthenticationError when no access token after refresh", async () => {
+            jest.resetModules();
+            const authModule = jest.requireMock("../lib/store/auth");
+            const mockRefreshAccessToken = jest
+                .fn()
+                .mockResolvedValue(true);
+
+            authModule.useAuthStore = {
+                getState: jest
+                    .fn()
+                    .mockReturnValueOnce({
+                        accessToken: "token",
+                        refreshAccessToken: mockRefreshAccessToken,
+                    })
+                    .mockReturnValueOnce({
+                        accessToken: "token",
+                        refreshAccessToken: mockRefreshAccessToken,
+                    })
+                    .mockReturnValueOnce({
+                        accessToken: null,
+                        refreshAccessToken: mockRefreshAccessToken,
+                    }),
+            };
+
+            const watchlistModule = jest.requireActual<typeof import("../lib/watchlist")>(
+                "../lib/watchlist"
+            );
+
+            fetchMock.mockResolvedValueOnce({
+                ok: false,
+                status: 401,
+                headers: {
+                    get: () => "application/json",
+                },
+                json: async () => ({
+                    message: "Unauthorized",
+                }),
+            });
+
+            await expect(watchlistModule.fetchWatchlist()).rejects.toThrow(
+                "Authentication required"
+            );
+            expect(mockRefreshAccessToken).toHaveBeenCalledTimes(1);
+        });
+
+        it("throws NetworkError on fetch network failure", async () => {
+            const { fetchWatchlist } = await loadModule();
+
+            fetchMock.mockRejectedValue(
+                new TypeError("Network request failed")
+            );
+
+            await expect(fetchWatchlist()).rejects.toThrow(
+                "Network request failed"
+            );
+        });
+
+        it("throws NetworkError on fetch failure with different message", async () => {
+            const { fetchWatchlist } = await loadModule();
+
+            fetchMock.mockRejectedValue(
+                new TypeError("Failed to fetch")
+            );
+
+            await expect(fetchWatchlist()).rejects.toThrow(
+                "Failed to fetch"
+            );
+        });
+
+        it("retries on network error and throws last error", async () => {
+            const { fetchWatchlist } = await loadModule();
+
+            fetchMock
+                .mockRejectedValueOnce(
+                    new Error("Network error 1")
+                )
+                .mockRejectedValueOnce(
+                    new Error("Network error 2")
+                );
+
+            await expect(fetchWatchlist()).rejects.toThrow(
+                "Network error 2"
+            );
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+        });
+
+        it("retries on generic error and throws last error", async () => {
+            const { fetchWatchlist } = await loadModule();
+
+            fetchMock
+                .mockRejectedValueOnce(new Error("Error 1"))
+                .mockRejectedValueOnce(new Error("Error 2"));
+
+            await expect(fetchWatchlist()).rejects.toThrow("Error 2");
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+        });
+
+        it("retries on non-Error exception", async () => {
+            const { fetchWatchlist } = await loadModule();
+
+            fetchMock
+                .mockRejectedValueOnce("string error")
+                .mockRejectedValueOnce("another error");
+
+            await expect(fetchWatchlist()).rejects.toThrow();
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+        });
+
+        it("throws last error when max retries exceeded", async () => {
+            const { fetchWatchlist } = await loadModule();
+
+            fetchMock.mockRejectedValue(new Error("Persistent error"));
+
+            await expect(fetchWatchlist()).rejects.toThrow(
+                "Persistent error"
+            );
+        });
+
+        it("throws error when delete response parsing fails", async () => {
+            const { removeFromWatchlist } = await loadModule();
+
+            fetchMock.mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    invalid: "response",
+                }),
+            });
+
+            await expect(removeFromWatchlist("media-123")).rejects.toThrow(
+                "Invalid delete response"
+            );
+        });
+
+        it("handles error when extracting error message from non-JSON fails", async () => {
+            const { fetchWatchlist } = await loadModule();
+
+            fetchMock.mockResolvedValue({
+                ok: false,
+                status: 500,
+                headers: {
+                    get: () => "text/plain",
+                },
+                text: async () => {
+                    throw new Error("Text read error");
+                },
             });
 
             await expect(fetchWatchlist()).rejects.toThrow(
