@@ -144,11 +144,12 @@ beforeEach(() => {
     mockPush.mockReset();
     useAuthStoreMock.mockImplementation(
         (selector?: (state: { isAuthenticated: boolean }) => unknown) => {
-        if (typeof selector === "function") {
-            return selector({ isAuthenticated: true });
+            if (typeof selector === "function") {
+                return selector({ isAuthenticated: true });
+            }
+            return true;
         }
-        return true;
-    });
+    );
 });
 
 afterEach(async () => {
@@ -169,12 +170,13 @@ afterEach(async () => {
 describe("SavedScreen UI", () => {
     it("shows login screen when user is not authenticated", () => {
         useAuthStoreMock.mockImplementation(
-        (selector?: (state: { isAuthenticated: boolean }) => unknown) => {
-            if (typeof selector === "function") {
-                return selector({ isAuthenticated: false });
+            (selector?: (state: { isAuthenticated: boolean }) => unknown) => {
+                if (typeof selector === "function") {
+                    return selector({ isAuthenticated: false });
+                }
+                return false;
             }
-            return false;
-        });
+        );
 
         const { getByText } = renderSavedTab();
 
@@ -253,8 +255,8 @@ describe("SavedScreen UI", () => {
 
         expect(await findByText("Movie One")).toBeTruthy();
         expect(getByText("Movie Two")).toBeTruthy();
-        expect(getByText("PLANNED")).toBeTruthy();
-        expect(getByText("WATCHING")).toBeTruthy();
+        expect(getByText("Planned")).toBeTruthy();
+        expect(getByText("Watching")).toBeTruthy();
         expect(getByText(/8\/10/)).toBeTruthy();
         expect(getByText("Great movie!")).toBeTruthy();
 
@@ -274,7 +276,7 @@ describe("SavedScreen UI", () => {
         const { findByText, getByText } = renderSavedTab();
 
         expect(await findByText("Test Movie")).toBeTruthy();
-        expect(getByText("COMPLETED")).toBeTruthy();
+        expect(getByText("Completed")).toBeTruthy();
         expect(getByText(/9\/10/)).toBeTruthy();
         expect(getByText("Amazing!")).toBeTruthy();
     });
@@ -411,8 +413,17 @@ describe("SavedScreen UI", () => {
 
         const { findByText, getByText } = renderSavedTab();
 
+        const statusTranslations: Record<string, string> = {
+            PLANNED: "Planned",
+            WATCHING: "Watching",
+            COMPLETED: "Completed",
+            ON_HOLD: "On Hold",
+            DROPPED: "Dropped",
+        };
+
         for (const status of statuses) {
-            expect(await findByText(status)).toBeTruthy();
+            const translatedStatus = statusTranslations[status];
+            expect(await findByText(translatedStatus)).toBeTruthy();
             expect(getByText(`Movie ${status}`)).toBeTruthy();
         }
     });

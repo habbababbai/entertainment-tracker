@@ -23,7 +23,7 @@ describe("i18n configuration", () => {
     it("falls back to English when another locale is requested", () => {
         const translateFrench = i18n.getFixedT("fr");
         expect(translateFrench("home.subtitle")).toBe(
-            "Browse your watchlist powered by Expo Router & TanStack Query."
+            "Browse your watchlist powered by OMDb."
         );
     });
 });

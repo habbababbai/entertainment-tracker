@@ -1,7 +1,7 @@
 {
     "expo": {
-        "name": "mobile",
-        "slug": "mobile",
+        "name": "Entertainment Tracker",
+        "slug": "entertainment-tracker",
         "version": "1.0.0",
         "orientation": "portrait",
         "icon": "./assets/icon.png",
@@ -10,16 +10,22 @@
         "splash": {
             "image": "./assets/splash-icon.png",
             "resizeMode": "contain",
-            "backgroundColor": "#ffffff"
+            "backgroundColor": "#2563eb",
+            "fullScreen": true
         },
         "ios": {
-            "supportsTablet": true
+            "supportsTablet": false,
+            "bundleIdentifier": "com.entertainmenttracker.app",
+            "infoPlist": {
+                "CFBundleDisplayName": "Entertainment Tracker"
+            }
         },
         "android": {
             "adaptiveIcon": {
                 "foregroundImage": "./assets/adaptive-icon.png",
-                "backgroundColor": "#ffffff"
+                "backgroundColor": "#2563eb"
             },
+            "package": "com.entertainmenttracker.app",
             "edgeToEdgeEnabled": true,
             "predictiveBackGestureEnabled": false
         },

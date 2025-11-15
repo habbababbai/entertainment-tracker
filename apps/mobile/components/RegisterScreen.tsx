@@ -259,7 +259,7 @@ const createStyles = (colors: ReturnType<typeof useTheme>) =>
         borderRadius: moderateScale(8),
     },
     errorText: {
-        color: colors.error,
+        color: colors.accentOnAccent,
         fontSize: fontSizes.sm,
         textAlign: "center",
     },

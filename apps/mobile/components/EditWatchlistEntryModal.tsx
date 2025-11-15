@@ -136,7 +136,7 @@ export default function EditWatchlistEntryModal({
                                                     styles.statusButtonTextActive,
                                             ]}
                                         >
-                                            {option}
+                                            {t(`status.${option}` as keyof typeof t)}
                                         </Text>
                                     </TouchableOpacity>
                                 ))}
