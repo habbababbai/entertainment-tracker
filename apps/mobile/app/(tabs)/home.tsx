@@ -424,7 +424,7 @@ const createStyles = (colors: ReturnType<typeof useTheme>) =>
             fontSize: fontSizes.sm,
         },
         listContent: {
-            paddingBottom: 0,
+            paddingBottom: scale(16),
         },
         listContentCentered: {
             flexGrow: 1,

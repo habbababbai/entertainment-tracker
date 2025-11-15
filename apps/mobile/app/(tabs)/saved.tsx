@@ -33,22 +33,16 @@ export default function SavedTab() {
 
 function SavedScreen() {
     const { t } = useTranslation();
-    const router = useRouter();
     const colors = useTheme();
     const styles = createStyles(colors);
 
-    const {
-        data,
-        isLoading,
-        isError,
-        error,
-        refetch,
-        isRefetching,
-    } = useQuery({
-        queryKey: ["watchlist"],
-        queryFn: fetchWatchlist,
-        staleTime: 1000 * 60,
-    });
+    const { data, isLoading, isError, error, refetch, isRefetching } = useQuery(
+        {
+            queryKey: ["watchlist"],
+            queryFn: fetchWatchlist,
+            staleTime: 1000 * 60,
+        }
+    );
 
     const items = data?.items ?? [];
     const showEmptyState = !isLoading && !isError && items.length === 0;
@@ -62,9 +56,7 @@ function SavedScreen() {
             return (
                 <View style={styles.centerContent}>
                     <ActivityIndicator size="large" />
-                    <Text style={styles.statusText}>
-                        {t("saved.loading")}
-                    </Text>
+                    <Text style={styles.statusText}>{t("saved.loading")}</Text>
                 </View>
             );
         }
@@ -83,9 +75,7 @@ function SavedScreen() {
                             {error.message}
                         </Text>
                     ) : null}
-                    <Text style={styles.hint}>
-                        {t("common.pullToRetry")}
-                    </Text>
+                    <Text style={styles.hint}>{t("common.pullToRetry")}</Text>
                 </View>
             );
         }
@@ -101,13 +91,7 @@ function SavedScreen() {
         }
 
         return null;
-    }, [
-        error?.message,
-        isError,
-        isLoading,
-        showEmptyState,
-        t,
-    ]);
+    }, [error?.message, isError, isLoading, showEmptyState, t]);
 
     const listContentStyle = useMemo(
         () => [
@@ -120,7 +104,7 @@ function SavedScreen() {
     );
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
             <View style={styles.wrapper}>
                 <Text style={styles.title}>{t("saved.title")}</Text>
                 <Text style={styles.subtitle}>{t("saved.subtitle")}</Text>
@@ -130,6 +114,7 @@ function SavedScreen() {
                     data={items}
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={listContentStyle}
+                    contentInsetAdjustmentBehavior="never"
                     refreshControl={
                         <RefreshControl
                             refreshing={isRefetching}
@@ -139,9 +124,7 @@ function SavedScreen() {
                     ItemSeparatorComponent={() => (
                         <View style={styles.separator} />
                     )}
-                    renderItem={({ item }) => (
-                        <WatchlistCard item={item} />
-                    )}
+                    renderItem={({ item }) => <WatchlistCard item={item} />}
                     ListEmptyComponent={listEmptyComponent}
                 />
             </View>
@@ -181,10 +164,14 @@ function WatchlistCard({ item }: { item: WatchEntry }) {
                 </Text>
                 <View style={styles.badgeContainer}>
                     <View style={styles.badge}>
-                        <Text style={styles.badgeText}>{item.mediaItem.mediaType}</Text>
+                        <Text style={styles.badgeText}>
+                            {item.mediaItem.mediaType}
+                        </Text>
                     </View>
                     <View style={styles.statusBadge}>
-                        <Text style={styles.statusBadgeText}>{statusLabel}</Text>
+                        <Text style={styles.statusBadgeText}>
+                            {statusLabel}
+                        </Text>
                     </View>
                 </View>
             </View>
@@ -220,136 +207,134 @@ const createStyles = (colors: ReturnType<typeof useTheme>) =>
             flex: 1,
             backgroundColor: colors.background,
         },
-    wrapper: {
-        flex: 1,
-        paddingHorizontal: scale(24),
-        paddingVertical: verticalScale(24),
-    },
-    title: {
-        fontSize: fontSizes.xl,
-        fontWeight: fontWeights.semiBold,
-        textAlign: "center",
-        color: colors.textPrimary,
-    },
-    subtitle: {
-        textAlign: "center",
-        marginTop: verticalScale(8),
-        marginBottom: verticalScale(16),
-        color: colors.textSecondary,
-        fontSize: fontSizes.md,
-    },
-    centerContent: {
-        flex: 1,
-        alignItems: "center",
-        justifyContent: "center",
-        gap: verticalScale(8),
-    },
-    statusText: {
-        color: colors.textSecondary,
-        textAlign: "center",
-        fontSize: fontSizes.sm,
-    },
-    errorText: {
-        fontSize: fontSizes.lg,
-        fontWeight: fontWeights.semiBold,
-        color: colors.error,
-        textAlign: "center",
-    },
-    errorDetails: {
-        textAlign: "center",
-        color: colors.errorMuted,
-        fontSize: fontSizes.sm,
-    },
-    hint: {
-        marginTop: verticalScale(8),
-        color: colors.textSecondary,
-        fontSize: fontSizes.sm,
-    },
-    listContent: {
-        paddingBottom: verticalScale(24),
-    },
-    listContentTop: {
-        flexGrow: 0,
-    },
-    listContentCentered: {
-        flexGrow: 1,
-        justifyContent: "center",
-    },
-    separator: {
-        height: verticalScale(16),
-    },
-    card: {
-        backgroundColor: colors.surface,
-        borderRadius: moderateScale(12),
-        padding: scale(16),
-        shadowColor: "#000",
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        shadowOffset: { width: 0, height: 2 },
-        elevation: 1,
-    },
-    cardHeader: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginBottom: 8,
-        gap: scale(8),
-    },
-    cardTitle: {
-        fontSize: fontSizes.lg,
-        fontWeight: fontWeights.semiBold,
-        flex: 1,
-        color: colors.textPrimary,
-    },
-    badgeContainer: {
-        flexDirection: "row",
-        gap: scale(8),
-        alignItems: "center",
-    },
-    badge: {
-        paddingVertical: verticalScale(4),
-        paddingHorizontal: scale(8),
-        borderRadius: moderateScale(999),
-        backgroundColor: colors.accent,
-    },
-    badgeText: {
-        color: colors.accentOnAccent,
-        fontSize: fontSizes.xs,
-        fontWeight: fontWeights.semiBold,
-    },
-    statusBadge: {
-        paddingVertical: verticalScale(4),
-        paddingHorizontal: scale(8),
-        borderRadius: moderateScale(999),
-        backgroundColor: colors.border,
-    },
-    statusBadgeText: {
-        color: colors.textPrimary,
-        fontSize: fontSizes.xs,
-        fontWeight: fontWeights.semiBold,
-    },
-    cardDescription: {
-        color: colors.textPrimary,
-        marginBottom: verticalScale(8),
-        fontSize: fontSizes.md,
-    },
-    cardDescriptionMuted: {
-        color: colors.textMuted,
-        fontStyle: "italic",
-        marginBottom: verticalScale(8),
-        fontSize: fontSizes.md,
-    },
-    cardMeta: {
-        gap: verticalScale(4),
-    },
-    cardMetaText: {
-        fontSize: fontSizes.xs,
-        color: colors.textMuted,
-    },
+        wrapper: {
+            flex: 1,
+            paddingHorizontal: scale(12),
+        },
+        title: {
+            fontSize: fontSizes.xl,
+            fontWeight: fontWeights.semiBold,
+            textAlign: "center",
+            color: colors.textPrimary,
+        },
+        subtitle: {
+            textAlign: "center",
+            marginTop: verticalScale(8),
+            marginBottom: verticalScale(16),
+            color: colors.textSecondary,
+            fontSize: fontSizes.md,
+        },
+        centerContent: {
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            gap: verticalScale(8),
+        },
+        statusText: {
+            color: colors.textSecondary,
+            textAlign: "center",
+            fontSize: fontSizes.sm,
+        },
+        errorText: {
+            fontSize: fontSizes.lg,
+            fontWeight: fontWeights.semiBold,
+            color: colors.error,
+            textAlign: "center",
+        },
+        errorDetails: {
+            textAlign: "center",
+            color: colors.errorMuted,
+            fontSize: fontSizes.sm,
+        },
+        hint: {
+            marginTop: verticalScale(8),
+            color: colors.textSecondary,
+            fontSize: fontSizes.sm,
+        },
+        listContent: {
+            paddingBottom: scale(16),
+        },
+        listContentTop: {
+            flexGrow: 0,
+        },
+        listContentCentered: {
+            flexGrow: 1,
+            justifyContent: "center",
+        },
+        separator: {
+            height: verticalScale(16),
+        },
+        card: {
+            backgroundColor: colors.surface,
+            borderRadius: moderateScale(12),
+            padding: scale(16),
+            shadowColor: "#000",
+            shadowOpacity: 0.05,
+            shadowRadius: 4,
+            shadowOffset: { width: 0, height: 2 },
+            elevation: 1,
+        },
+        cardHeader: {
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 8,
+            gap: scale(8),
+        },
+        cardTitle: {
+            fontSize: fontSizes.lg,
+            fontWeight: fontWeights.semiBold,
+            flex: 1,
+            color: colors.textPrimary,
+        },
+        badgeContainer: {
+            flexDirection: "row",
+            gap: scale(8),
+            alignItems: "center",
+        },
+        badge: {
+            paddingVertical: verticalScale(4),
+            paddingHorizontal: scale(8),
+            borderRadius: moderateScale(999),
+            backgroundColor: colors.accent,
+        },
+        badgeText: {
+            color: colors.accentOnAccent,
+            fontSize: fontSizes.xs,
+            fontWeight: fontWeights.semiBold,
+        },
+        statusBadge: {
+            paddingVertical: verticalScale(4),
+            paddingHorizontal: scale(8),
+            borderRadius: moderateScale(999),
+            backgroundColor: colors.border,
+        },
+        statusBadgeText: {
+            color: colors.textPrimary,
+            fontSize: fontSizes.xs,
+            fontWeight: fontWeights.semiBold,
+        },
+        cardDescription: {
+            color: colors.textPrimary,
+            marginBottom: verticalScale(8),
+            fontSize: fontSizes.md,
+        },
+        cardDescriptionMuted: {
+            color: colors.textMuted,
+            fontStyle: "italic",
+            marginBottom: verticalScale(8),
+            fontSize: fontSizes.md,
+        },
+        cardMeta: {
+            gap: verticalScale(4),
+        },
+        cardMetaText: {
+            fontSize: fontSizes.xs,
+            color: colors.textMuted,
+        },
         cardNotes: {
             fontSize: fontSizes.sm,
             color: colors.textSecondary,
             fontStyle: "italic",
         },
     });
-

@@ -14,7 +14,7 @@ import { useRouter } from "expo-router";
 
 import LoginScreen from "../../components/LoginScreen";
 import { useAuthStore } from "../../lib/store/auth";
-import { useThemeStore, type ThemeMode } from "../../lib/store/theme";
+import { useThemeStore } from "../../lib/store/theme";
 import { useTheme } from "../../lib/theme";
 import { fontSizes, fontWeights } from "../../lib/theme/fonts";
 
@@ -53,15 +53,14 @@ function SettingsScreen() {
     };
 
     const isSystemTheme = themeMode === "system";
-    const currentTheme =
-        themeMode === "system" ? getSystemTheme() : themeMode;
+    const currentTheme = themeMode === "system" ? getSystemTheme() : themeMode;
     const isDarkMode = currentTheme === "dark";
     const themeLabel = isDarkMode ? "Dark Mode" : "Light Mode";
 
     const styles = createStyles(colors);
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
             <ScrollView
                 style={styles.scrollView}
                 contentContainerStyle={styles.content}
