@@ -8,8 +8,7 @@ export const en = {
     },
     home: {
         title: "Entertainment Tracker",
-        subtitle:
-            "Browse your watchlist powered by Expo Router & TanStack Query.",
+        subtitle: "Browse your watchlist powered by OMDb.",
         searchPlaceholder: "Search OMDb (e.g. Spirited Away)",
         searchAction: "Search",
         startTyping: "Start typing to search OMDb titles.",
@@ -56,6 +55,13 @@ export const en = {
             status: "Status",
             rating: "Rating",
         },
+    },
+    status: {
+        PLANNED: "Planned",
+        WATCHING: "Watching",
+        COMPLETED: "Completed",
+        ON_HOLD: "On Hold",
+        DROPPED: "Dropped",
     },
 };
 

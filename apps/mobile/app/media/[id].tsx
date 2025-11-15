@@ -257,10 +257,19 @@ export default function MediaDetailsScreen() {
                 >
                     <View style={styles.header}>
                         <Text style={styles.title}>{data.title}</Text>
-                        <View style={styles.badge}>
-                            <Text style={styles.badgeText}>
-                                {data.mediaType}
-                            </Text>
+                        <View style={styles.badgeContainer}>
+                            <View style={styles.badge}>
+                                <Text style={styles.badgeText}>
+                                    {data.mediaType}
+                                </Text>
+                            </View>
+                            {watchEntry && (
+                                <View style={styles.statusBadge}>
+                                    <Text style={styles.statusBadgeText}>
+                                        {t(`status.${watchEntry.status}` as keyof typeof t)}
+                                    </Text>
+                                </View>
+                            )}
                         </View>
                     </View>
                     {data.posterUrl ? (
@@ -448,6 +457,11 @@ const createStyles = (colors: ReturnType<typeof useTheme>) =>
         fontWeight: fontWeights.semiBold,
         color: colors.textPrimary,
     },
+    badgeContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: scale(8),
+    },
     badge: {
         backgroundColor: colors.accent,
         paddingHorizontal: scale(12),
@@ -456,6 +470,19 @@ const createStyles = (colors: ReturnType<typeof useTheme>) =>
     },
     badgeText: {
         color: colors.accentOnAccent,
+        fontSize: fontSizes.xs,
+        fontWeight: fontWeights.semiBold,
+    },
+    statusBadge: {
+        backgroundColor: colors.surface,
+        paddingHorizontal: scale(12),
+        paddingVertical: verticalScale(4),
+        borderRadius: moderateScale(999),
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    statusBadgeText: {
+        color: colors.textPrimary,
         fontSize: fontSizes.xs,
         fontWeight: fontWeights.semiBold,
     },

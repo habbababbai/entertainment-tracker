@@ -160,7 +160,7 @@ function WatchlistCard({ item }: { item: WatchEntry }) {
         setIsEditModalVisible(false);
     }, []);
 
-    const statusLabel = item.status;
+    const statusLabel = t(`status.${item.status}` as keyof typeof t);
     const ratingLabel = item.rating
         ? `${item.rating}/10`
         : t("common.notAvailable");
