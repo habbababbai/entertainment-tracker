@@ -17,68 +17,36 @@ function getAccessToken(): string | null {
     return useAuthStore.getState().accessToken;
 }
 
-// Re-export types for convenience
-export type {
-    WatchEntry,
-    WatchlistResponse,
-    AddWatchlistRequest,
-    UpdateWatchlistRequest,
-} from "@entertainment-tracker/contracts";
+async function extractErrorMessage(
+    response: Response
+): Promise<string | undefined> {
+    try {
+        const contentType = response.headers.get("content-type");
+        if (contentType?.includes("application/json")) {
+            const errorData = await response.json();
+            if (
+                typeof errorData === "object" &&
+                errorData !== null &&
+                "message" in errorData &&
+                typeof errorData.message === "string"
+            ) {
+                return errorData.message;
+            }
+        } else {
+            const text = await response.text();
+            return text.trim() || undefined;
+        }
+    } catch {
+        return undefined;
+    }
+}
 
-async function authenticatedFetch<T>(
-    path: string,
-    options: RequestInit,
+async function parseResponse<T>(
+    response: Response,
     parser: (value: unknown) => T
 ): Promise<T> {
-    const accessToken = getAccessToken();
-
-    if (!accessToken) {
-        throw new Error("Not authenticated");
-    }
-
-    const url = new URL(path, API_BASE_URL);
-
-    const hasBody = options.body !== undefined && options.body !== null;
-    const headers: Record<string, string> = {
-        Authorization: `Bearer ${accessToken}`,
-        ...(options.headers as Record<string, string> | undefined),
-    };
-
-    if (hasBody) {
-        headers["Content-Type"] = "application/json";
-    }
-
-    const response = await fetch(url.toString(), {
-        ...options,
-        headers,
-    });
-
-    if (response.status === 401) {
-        throw new Error("Authentication required");
-    }
-
     if (!response.ok) {
-        let message: string | undefined;
-        try {
-            const contentType = response.headers.get("content-type");
-            if (contentType?.includes("application/json")) {
-                const errorData = await response.json();
-                if (
-                    typeof errorData === "object" &&
-                    errorData !== null &&
-                    "message" in errorData &&
-                    typeof errorData.message === "string"
-                ) {
-                    message = errorData.message;
-                }
-            } else {
-                const text = await response.text();
-                message = text.trim() || undefined;
-            }
-        } catch {
-            message = undefined;
-        }
-
+        const message = await extractErrorMessage(response);
         throw new Error(
             message || `Request failed with status ${response.status}`
         );
@@ -102,6 +70,69 @@ async function authenticatedFetch<T>(
         throw new Error(`Malformed response: ${String(detailSource)}`);
     }
 }
+
+async function authenticatedFetch<T>(
+    path: string,
+    options: RequestInit,
+    parser: (value: unknown) => T,
+    retryOn401 = true
+): Promise<T> {
+    const url = new URL(path, API_BASE_URL).toString();
+
+    let accessToken = getAccessToken();
+    if (!accessToken) {
+        throw new Error("Not authenticated");
+    }
+
+    const hasBody = options.body !== undefined && options.body !== null;
+    let headers: Record<string, string> = {
+        Authorization: `Bearer ${accessToken}`,
+        ...(options.headers as Record<string, string> | undefined),
+    };
+
+    if (hasBody) {
+        headers["Content-Type"] = "application/json";
+    }
+
+    let response = await fetch(url, {
+        ...options,
+        headers,
+    });
+
+    if (response.status === 401 && retryOn401) {
+        const refreshSuccess = await useAuthStore
+            .getState()
+            .refreshAccessToken();
+
+        if (!refreshSuccess) {
+            throw new Error("Authentication required");
+        }
+
+        const newAccessToken = getAccessToken();
+        if (!newAccessToken) {
+            throw new Error("Authentication required");
+        }
+
+        headers = {
+            ...headers,
+            Authorization: `Bearer ${newAccessToken}`,
+        };
+
+        response = await fetch(url, {
+            ...options,
+            headers,
+        });
+    }
+
+    return parseResponse(response, parser);
+}
+
+export type {
+    WatchEntry,
+    WatchlistResponse,
+    AddWatchlistRequest,
+    UpdateWatchlistRequest,
+} from "@entertainment-tracker/contracts";
 
 function parseWatchEntry(value: unknown): WatchEntry {
     return watchEntrySchema.parse(value);

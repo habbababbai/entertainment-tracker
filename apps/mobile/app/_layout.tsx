@@ -50,12 +50,7 @@ function createPersistedQueryClient() {
 
 export default function RootLayout() {
     const [queryClient] = useState(() => createPersistedQueryClient());
-    const loadTokens = useAuthStore((state) => state.loadTokens);
     const { themeMode, getSystemTheme } = useThemeStore();
-
-    useEffect(() => {
-        loadTokens();
-    }, [loadTokens]);
 
     const isDark =
         themeMode === "dark" ||

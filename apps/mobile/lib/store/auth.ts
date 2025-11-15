@@ -1,8 +1,10 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import * as SecureStore from "expo-secure-store";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import type { AuthUser, AuthTokens, AuthResponse } from "../types";
+import { refreshTokens } from "../auth";
 import { isTestEnv } from "../utils/env";
 
 const TOKEN_KEYS = {
@@ -15,11 +17,13 @@ interface AuthState {
     accessToken: string | null;
     refreshToken: string | null;
     isAuthenticated: boolean;
+    _refreshPromise: Promise<boolean> | null;
     setAuth: (user: AuthUser, tokens: AuthTokens) => Promise<void>;
     setAuthFromResponse: (response: AuthResponse) => Promise<void>;
     clearAuth: () => Promise<void>;
     updateUser: (user: Partial<AuthUser>) => void;
     loadTokens: () => Promise<void>;
+    refreshAccessToken: () => Promise<boolean>;
 }
 
 export const secureStorage = {
@@ -69,6 +73,7 @@ export const useAuthStore = create<AuthState>()(
             accessToken: null,
             refreshToken: null,
             isAuthenticated: false,
+            _refreshPromise: null,
             setAuth: async (user, tokens) => {
                 await Promise.all([
                     secureStorage.setItem(
@@ -115,6 +120,7 @@ export const useAuthStore = create<AuthState>()(
                     accessToken: null,
                     refreshToken: null,
                     isAuthenticated: false,
+                    _refreshPromise: null,
                 });
             },
             updateUser: (updates) =>
@@ -127,28 +133,64 @@ export const useAuthStore = create<AuthState>()(
                     secureStorage.getItem(TOKEN_KEYS.refreshToken),
                 ]);
 
-                if (accessToken && refreshToken && get().user) {
+                if (accessToken && refreshToken) {
                     set({
                         accessToken,
                         refreshToken,
-                        isAuthenticated: true,
+                        isAuthenticated: !!get().user,
                     });
-                } else if (!accessToken || !refreshToken) {
+                } else {
                     set({
                         accessToken: null,
                         refreshToken: null,
                         isAuthenticated: false,
+                        user: null,
                     });
                 }
+            },
+            refreshAccessToken: async () => {
+                const state = get();
+
+                if (state._refreshPromise) {
+                    return state._refreshPromise;
+                }
+
+                const currentRefreshToken = state.refreshToken;
+
+                if (!currentRefreshToken) {
+                    return false;
+                }
+
+                const refreshPromise = (async () => {
+                    try {
+                        const response = await refreshTokens(
+                            currentRefreshToken
+                        );
+                        await get().setAuthFromResponse(response);
+                        set({ _refreshPromise: null });
+                        return true;
+                    } catch {
+                        await get().clearAuth();
+                        set({ _refreshPromise: null });
+                        return false;
+                    }
+                })();
+
+                set({ _refreshPromise: refreshPromise });
+
+                return refreshPromise;
             },
         }),
         {
             name: "auth-storage",
-            storage: createJSONStorage(() => secureStorage),
+            storage: createJSONStorage(() => AsyncStorage),
             partialize: (state) => ({
                 user: state.user,
                 isAuthenticated: state.isAuthenticated,
             }),
+            onRehydrateStorage: () => async () => {
+                await useAuthStore.getState().loadTokens();
+            },
         }
     )
 );
