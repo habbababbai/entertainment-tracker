@@ -1,6 +1,13 @@
 import { buildApp } from "./app.js";
 import { env } from "./env.js";
 
+/**
+ * Bootstraps the application by building the Fastify app and starting the server.
+ * Listens on the port and host specified in environment variables.
+ * Exits the process with code 1 if the server fails to start.
+ *
+ * @throws Exits the process if server startup fails
+ */
 async function bootstrap(): Promise<void> {
     const app = buildApp();
 

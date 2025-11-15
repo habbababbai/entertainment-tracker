@@ -177,6 +177,15 @@ export const mediaRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
     );
 };
 
+/**
+ * Fetches a media item from OMDb API by its ID (IMDb ID).
+ * Returns `null` if the media item is not found.
+ *
+ * @param app - The Fastify instance (for logging and OMDb requests)
+ * @param id - The IMDb ID (e.g., "tt1375666")
+ * @returns A promise that resolves to a MediaItem, or `null` if not found
+ * @throws {Error} If the OMDb API returns an error other than "not found"
+ */
 async function fetchOmdbMediaById(
     app: FastifyInstance,
     id: string
@@ -207,6 +216,17 @@ async function fetchOmdbMediaById(
     return mapped;
 }
 
+/**
+ * Fetches a paginated list of media items from OMDb API based on a search query.
+ * Handles pagination across OMDb's page-based API to return the requested limit and page.
+ * Deduplicates results by IMDb ID and handles API rate limits.
+ *
+ * @param app - The Fastify instance (for logging and OMDb requests)
+ * @param query - The search query string
+ * @param limit - Maximum number of items to return
+ * @param page - Page number (1-based)
+ * @returns A promise that resolves to a MediaList with items, pagination info, and hasMore flag
+ */
 async function fetchOmdbMedia(
     app: FastifyInstance,
     query: string,

@@ -73,6 +73,17 @@ const errorResponseSchema = {
 type AddWatchlistBody = AddWatchlistRequest;
 type UpdateWatchlistBody = UpdateWatchlistRequest;
 
+/**
+ * Resolves a media item ID by checking the database first, then fetching from OMDb if needed.
+ * Accepts either an internal database ID or an external ID (IMDb ID).
+ * If the media item doesn't exist in the database, fetches it from OMDb and creates/updates it.
+ *
+ * @param app - The Fastify instance (for database and OMDb access)
+ * @param mediaItemId - Either the internal database ID or external ID (IMDb ID)
+ * @returns A promise that resolves to the internal database ID
+ * @throws {HttpError} If the media item is not found in OMDb
+ * @throws {Error} If OMDb API returns an error
+ */
 async function resolveMediaItemId(
     app: FastifyInstance,
     mediaItemId: string
@@ -536,6 +547,13 @@ export const watchlistRoutes: FastifyPluginAsync = async (
     );
 };
 
+/**
+ * Serializes a watchlist entry database object to a safe format for API responses.
+ * Converts Date objects to ISO strings for proper JSON serialization.
+ *
+ * @param entry - The watchlist entry object from Prisma
+ * @returns A serialized watchlist entry object safe for API responses
+ */
 function serializeWatchEntry(entry: {
     id: string;
     userId: string;

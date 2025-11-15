@@ -476,6 +476,14 @@ export const authRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
     );
 };
 
+/**
+ * Builds an authentication response object containing user data and tokens.
+ * Serializes the user object before including it in the response.
+ *
+ * @param user - The user object from the database
+ * @param tokens - Object containing access and refresh tokens
+ * @returns An AuthResponse object with serialized user and tokens
+ */
 function buildAuthResponse(
     user: User,
     tokens: { accessToken: string; refreshToken: string }
@@ -487,6 +495,13 @@ function buildAuthResponse(
     };
 }
 
+/**
+ * Serializes a User database object to a safe format for API responses.
+ * Converts Date objects to ISO strings and excludes sensitive fields like passwordHash.
+ *
+ * @param user - The User object from Prisma
+ * @returns A serialized user object safe for API responses
+ */
 function serializeUser(user: User): SerializedUser {
     return {
         id: user.id,
@@ -497,6 +512,13 @@ function serializeUser(user: User): SerializedUser {
     };
 }
 
+/**
+ * Checks if an error is a Prisma unique constraint violation error.
+ * Prisma throws errors with code "P2002" when a unique constraint is violated.
+ *
+ * @param error - The error object to check
+ * @returns `true` if the error is a unique constraint violation, `false` otherwise
+ */
 function isUniqueConstraintError(error: unknown): boolean {
     return (
         typeof error === "object" &&
@@ -506,6 +528,16 @@ function isUniqueConstraintError(error: unknown): boolean {
     );
 }
 
+/**
+ * Retrieves and validates a user for a refresh token.
+ * Verifies the refresh token, then checks that the user exists and token version matches.
+ * Throws an unauthorized error if validation fails.
+ *
+ * @param app - The Fastify instance (for database access)
+ * @param refreshToken - The refresh token to validate
+ * @returns A promise that resolves to the authenticated User object
+ * @throws {HttpError} If the token is invalid, expired, or user/token version mismatch
+ */
 async function getUserForRefreshToken(
     app: FastifyInstance,
     refreshToken: string
