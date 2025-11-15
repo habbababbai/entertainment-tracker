@@ -18,7 +18,7 @@ import LoginScreen from "../../components/LoginScreen";
 import { fetchWatchlist, type WatchEntry } from "../../lib/watchlist";
 import { useAuthStore } from "../../lib/store/auth";
 import "../../lib/i18n";
-import { colors } from "../../lib/theme/colors";
+import { useTheme } from "../../lib/theme";
 import { fontSizes, fontWeights } from "../../lib/theme/fonts";
 
 export default function SavedTab() {
@@ -34,6 +34,8 @@ export default function SavedTab() {
 function SavedScreen() {
     const { t } = useTranslation();
     const router = useRouter();
+    const colors = useTheme();
+    const styles = createStyles(colors);
 
     const {
         data,
@@ -149,6 +151,8 @@ function SavedScreen() {
 function WatchlistCard({ item }: { item: WatchEntry }) {
     const { t } = useTranslation();
     const router = useRouter();
+    const colors = useTheme();
+    const styles = createStyles(colors);
 
     const handlePress = useCallback(() => {
         router.push({
@@ -209,11 +213,12 @@ function WatchlistCard({ item }: { item: WatchEntry }) {
     );
 }
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: colors.background,
-    },
+const createStyles = (colors: ReturnType<typeof useTheme>) =>
+    StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: colors.background,
+        },
     wrapper: {
         flex: 1,
         paddingHorizontal: scale(24),
@@ -337,10 +342,10 @@ const styles = StyleSheet.create({
         fontSize: fontSizes.xs,
         color: colors.textMuted,
     },
-    cardNotes: {
-        fontSize: fontSizes.sm,
-        color: colors.textSecondary,
-        fontStyle: "italic",
-    },
-});
+        cardNotes: {
+            fontSize: fontSizes.sm,
+            color: colors.textSecondary,
+            fontStyle: "italic",
+        },
+    });
 

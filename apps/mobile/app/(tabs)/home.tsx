@@ -20,7 +20,7 @@ import { useRouter } from "expo-router";
 import { fetchMedia, type MediaItem, type MediaList } from "../../lib/media";
 import { useHomeStore } from "../../lib/store";
 import "../../lib/i18n";
-import { colors } from "../../lib/theme/colors";
+import { useTheme } from "../../lib/theme";
 import { fontSizes, fontWeights } from "../../lib/theme/fonts";
 
 const PAGE_SIZE = 15;
@@ -37,6 +37,8 @@ export default function HomeScreen() {
     const flatListRef = useRef<FlatList<MediaItem>>(null);
     const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const { t } = useTranslation();
+    const colors = useTheme();
+    const styles = createStyles(colors);
 
     useEffect(() => {
         setSearch(submittedSearch);
@@ -282,6 +284,8 @@ export default function HomeScreen() {
 function MediaCard({ item }: { item: MediaItem }) {
     const { t } = useTranslation();
     const router = useRouter();
+    const colors = useTheme();
+    const styles = createStyles(colors);
     const fallbackLabel = t("common.notAvailable");
     const releaseLabel = formatDate(item.releaseDate, fallbackLabel);
     const updatedLabel = formatDate(item.updatedAt, fallbackLabel);
@@ -340,144 +344,145 @@ function formatDate(
     return date.toLocaleDateString();
 }
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: colors.background,
-    },
-    wrapper: {
-        flex: 1,
-        paddingHorizontal: scale(24),
-        paddingVertical: verticalScale(24),
-    },
-    title: {
-        fontSize: fontSizes.xl,
-        fontWeight: fontWeights.semiBold,
-        textAlign: "center",
-        color: colors.textPrimary,
-    },
-    subtitle: {
-        textAlign: "center",
-        marginTop: verticalScale(8),
-        marginBottom: verticalScale(16),
-        color: colors.textSecondary,
-        fontSize: fontSizes.md,
-    },
-    centerContent: {
-        flex: 1,
-        alignItems: "center",
-        justifyContent: "center",
-        gap: verticalScale(8),
-    },
-    statusText: {
-        color: colors.textSecondary,
-        textAlign: "center",
-        fontSize: fontSizes.sm,
-    },
-    errorText: {
-        fontSize: fontSizes.lg,
-        fontWeight: fontWeights.semiBold,
-        color: colors.error,
-        textAlign: "center",
-    },
-    errorDetails: {
-        textAlign: "center",
-        color: colors.errorMuted,
-        fontSize: fontSizes.sm,
-    },
-    hint: {
-        marginTop: verticalScale(8),
-        color: colors.textSecondary,
-        fontSize: fontSizes.sm,
-    },
-    searchBar: {
-        flexDirection: "row",
-        gap: scale(12),
-        alignItems: "center",
-        marginBottom: verticalScale(16),
-    },
-    searchInput: {
-        flex: 1,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: moderateScale(10),
-        paddingHorizontal: scale(12),
-        paddingVertical: verticalScale(10),
-        fontSize: fontSizes.md,
-        backgroundColor: colors.surface,
-        color: colors.textPrimary,
-    },
-    searchButton: {
-        backgroundColor: colors.accent,
-        paddingHorizontal: scale(16),
-        paddingVertical: verticalScale(10),
-        borderRadius: moderateScale(10),
-    },
-    searchButtonText: {
-        color: colors.accentOnAccent,
-        fontWeight: fontWeights.semiBold,
-        fontSize: fontSizes.sm,
-    },
-    listContent: {
-        paddingBottom: verticalScale(24),
-    },
-    listContentCentered: {
-        flexGrow: 1,
-        justifyContent: "center",
-    },
-    separator: {
-        height: verticalScale(16),
-    },
-    card: {
-        backgroundColor: colors.surface,
-        borderRadius: moderateScale(12),
-        padding: scale(16),
-        shadowColor: "#000",
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        shadowOffset: { width: 0, height: 2 },
-        elevation: 1,
-    },
-    cardHeader: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginBottom: 8,
-    },
-    cardTitle: {
-        fontSize: fontSizes.lg,
-        fontWeight: fontWeights.semiBold,
-        flex: 1,
-        marginRight: scale(12),
-        color: colors.textPrimary,
-    },
-    badge: {
-        paddingVertical: verticalScale(4),
-        paddingHorizontal: scale(8),
-        borderRadius: moderateScale(999),
-        backgroundColor: colors.accent,
-        color: colors.accentOnAccent,
-        fontSize: fontSizes.xs,
-        fontWeight: fontWeights.semiBold,
-    },
-    cardDescription: {
-        color: colors.textPrimary,
-        marginBottom: verticalScale(8),
-        fontSize: fontSizes.md,
-    },
-    cardDescriptionMuted: {
-        color: colors.textMuted,
-        fontStyle: "italic",
-        marginBottom: verticalScale(8),
-        fontSize: fontSizes.md,
-    },
-    cardMeta: {
-        fontSize: fontSizes.xs,
-        color: colors.textMuted,
-    },
-    footer: {
-        paddingVertical: verticalScale(16),
-        alignItems: "center",
-        justifyContent: "center",
-    },
-});
+const createStyles = (colors: ReturnType<typeof useTheme>) =>
+    StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: colors.background,
+        },
+        wrapper: {
+            flex: 1,
+            paddingHorizontal: scale(24),
+            paddingVertical: verticalScale(24),
+        },
+        title: {
+            fontSize: fontSizes.xl,
+            fontWeight: fontWeights.semiBold,
+            textAlign: "center",
+            color: colors.textPrimary,
+        },
+        subtitle: {
+            textAlign: "center",
+            marginTop: verticalScale(8),
+            marginBottom: verticalScale(16),
+            color: colors.textSecondary,
+            fontSize: fontSizes.md,
+        },
+        centerContent: {
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            gap: verticalScale(8),
+        },
+        statusText: {
+            color: colors.textSecondary,
+            textAlign: "center",
+            fontSize: fontSizes.sm,
+        },
+        errorText: {
+            fontSize: fontSizes.lg,
+            fontWeight: fontWeights.semiBold,
+            color: colors.error,
+            textAlign: "center",
+        },
+        errorDetails: {
+            textAlign: "center",
+            color: colors.errorMuted,
+            fontSize: fontSizes.sm,
+        },
+        hint: {
+            marginTop: verticalScale(8),
+            color: colors.textSecondary,
+            fontSize: fontSizes.sm,
+        },
+        searchBar: {
+            flexDirection: "row",
+            gap: scale(12),
+            alignItems: "center",
+            marginBottom: verticalScale(16),
+        },
+        searchInput: {
+            flex: 1,
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: moderateScale(10),
+            paddingHorizontal: scale(12),
+            paddingVertical: verticalScale(10),
+            fontSize: fontSizes.md,
+            backgroundColor: colors.surface,
+            color: colors.textPrimary,
+        },
+        searchButton: {
+            backgroundColor: colors.accent,
+            paddingHorizontal: scale(16),
+            paddingVertical: verticalScale(10),
+            borderRadius: moderateScale(10),
+        },
+        searchButtonText: {
+            color: colors.accentOnAccent,
+            fontWeight: fontWeights.semiBold,
+            fontSize: fontSizes.sm,
+        },
+        listContent: {
+            paddingBottom: verticalScale(24),
+        },
+        listContentCentered: {
+            flexGrow: 1,
+            justifyContent: "center",
+        },
+        separator: {
+            height: verticalScale(16),
+        },
+        card: {
+            backgroundColor: colors.surface,
+            borderRadius: moderateScale(12),
+            padding: scale(16),
+            shadowColor: "#000",
+            shadowOpacity: 0.05,
+            shadowRadius: 4,
+            shadowOffset: { width: 0, height: 2 },
+            elevation: 1,
+        },
+        cardHeader: {
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 8,
+        },
+        cardTitle: {
+            fontSize: fontSizes.lg,
+            fontWeight: fontWeights.semiBold,
+            flex: 1,
+            marginRight: scale(12),
+            color: colors.textPrimary,
+        },
+        badge: {
+            paddingVertical: verticalScale(4),
+            paddingHorizontal: scale(8),
+            borderRadius: moderateScale(999),
+            backgroundColor: colors.accent,
+            color: colors.accentOnAccent,
+            fontSize: fontSizes.xs,
+            fontWeight: fontWeights.semiBold,
+        },
+        cardDescription: {
+            color: colors.textPrimary,
+            marginBottom: verticalScale(8),
+            fontSize: fontSizes.md,
+        },
+        cardDescriptionMuted: {
+            color: colors.textMuted,
+            fontStyle: "italic",
+            marginBottom: verticalScale(8),
+            fontSize: fontSizes.md,
+        },
+        cardMeta: {
+            fontSize: fontSizes.xs,
+            color: colors.textMuted,
+        },
+        footer: {
+            paddingVertical: verticalScale(16),
+            alignItems: "center",
+            justifyContent: "center",
+        },
+    });
