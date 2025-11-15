@@ -214,7 +214,7 @@ export default function HomeScreen() {
     );
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                 <View style={styles.wrapper}>
                     <Text style={styles.title}>{t("home.title")}</Text>
@@ -247,6 +247,7 @@ export default function HomeScreen() {
                         data={items}
                         keyExtractor={(item) => item.id}
                         contentContainerStyle={listContentStyle}
+                        contentInsetAdjustmentBehavior="never"
                         keyboardShouldPersistTaps="handled"
                         refreshControl={
                             <RefreshControl
@@ -352,8 +353,7 @@ const createStyles = (colors: ReturnType<typeof useTheme>) =>
         },
         wrapper: {
             flex: 1,
-            paddingHorizontal: scale(24),
-            paddingVertical: verticalScale(24),
+            paddingHorizontal: scale(12),
         },
         title: {
             fontSize: fontSizes.xl,
@@ -424,7 +424,7 @@ const createStyles = (colors: ReturnType<typeof useTheme>) =>
             fontSize: fontSizes.sm,
         },
         listContent: {
-            paddingBottom: verticalScale(24),
+            paddingBottom: 0,
         },
         listContentCentered: {
             flexGrow: 1,
