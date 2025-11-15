@@ -147,12 +147,14 @@ export default function EditWatchlistEntryModal({
                             <Text style={styles.sectionTitle}>
                                 {t("saved.edit.rating")}
                             </Text>
-                            <StarRatingComponent
-                                rating={rating}
-                                onRatingChange={setRating}
-                                maxStars={10}
-                                size={32}
-                            />
+                            <View style={styles.ratingContainer}>
+                                <StarRatingComponent
+                                    rating={rating}
+                                    onRatingChange={setRating}
+                                    maxStars={10}
+                                    size={20}
+                                />
+                            </View>
                             {rating !== null && (
                                 <Text style={styles.ratingText}>
                                     {rating}/10
@@ -240,6 +242,7 @@ const createStyles = (colors: ReturnType<typeof useTheme>) =>
         },
         section: {
             marginBottom: verticalScale(24),
+            alignItems: "flex-start",
         },
         sectionTitle: {
             fontSize: fontSizes.md,
@@ -271,6 +274,11 @@ const createStyles = (colors: ReturnType<typeof useTheme>) =>
         },
         statusButtonTextActive: {
             color: colors.accentOnAccent,
+        },
+        ratingContainer: {
+            width: "100%",
+            alignItems: "center",
+            overflow: "visible",
         },
         ratingText: {
             marginTop: verticalScale(8),

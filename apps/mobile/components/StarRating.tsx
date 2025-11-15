@@ -22,13 +22,7 @@ export default function StarRatingComponent({
 
     const handleRatingChange = (newRating: number) => {
         if (disabled) return;
-
-        // If clicking the same star, remove rating (set to null)
-        if (rating === newRating) {
-            onRatingChange(null);
-        } else {
-            onRatingChange(newRating);
-        }
+        onRatingChange(rating === newRating ? null : newRating);
     };
 
     return (
@@ -53,6 +47,7 @@ export default function StarRatingComponent({
 const createStyles = () =>
     StyleSheet.create({
         container: {
-            alignItems: "flex-start",
+            width: "100%",
+            alignItems: "center",
         },
     });
