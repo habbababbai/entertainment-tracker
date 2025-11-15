@@ -12,6 +12,17 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import SettingsTab from "../app/(tabs)/settings";
 import { useAuthStore } from "../lib/store/auth";
 
+jest.mock("@react-native-async-storage/async-storage", () => ({
+    getItem: jest.fn(),
+    setItem: jest.fn(),
+    removeItem: jest.fn(),
+    multiGet: jest.fn(),
+    multiSet: jest.fn(),
+    clear: jest.fn(),
+    getAllKeys: jest.fn(),
+    multiRemove: jest.fn(),
+}));
+
 jest.mock("../lib/store/auth", () => {
     const actual = jest.requireActual("../lib/store/auth");
     return {
