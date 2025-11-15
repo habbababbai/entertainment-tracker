@@ -36,6 +36,27 @@ export interface FetchMediaOptions {
     page?: number;
 }
 
+/**
+ * Fetches a paginated list of media items from the API based on a search query.
+ *
+ * @param options - The search options
+ * @param options.query - The search query string (will be trimmed)
+ * @param options.limit - Maximum number of items per page (default: 15)
+ * @param options.page - Page number to fetch (default: 1)
+ * @returns A promise that resolves to a MediaList containing items and pagination info
+ * @throws {Error} If the query is empty or the API request fails
+ *
+ * @example
+ * ```ts
+ * const results = await fetchMedia({
+ *   query: "Spirited Away",
+ *   limit: 20,
+ *   page: 1
+ * });
+ * console.log(results.items); // Array of media items
+ * console.log(results.hasMore); // Whether more pages exist
+ * ```
+ */
 export async function fetchMedia({
     query,
     limit = 15,
@@ -64,6 +85,20 @@ export async function fetchMedia({
     return mediaListSchema.parse(await response.json());
 }
 
+/**
+ * Fetches a single media item by its external ID (e.g., IMDb ID).
+ *
+ * @param id - The external ID of the media item (e.g., "tt0133093" for The Matrix)
+ * @returns A promise that resolves to the MediaItem
+ * @throws {Error} If the ID is empty, the item is not found (404), or the API request fails
+ *
+ * @example
+ * ```ts
+ * const movie = await fetchMediaItem("tt0133093");
+ * console.log(movie.title); // "The Matrix"
+ * console.log(movie.mediaType); // "MOVIE"
+ * ```
+ */
 export async function fetchMediaItem(id: string): Promise<MediaItem> {
     const trimmedId = id.trim();
 
@@ -91,6 +126,20 @@ export async function fetchMediaItem(id: string): Promise<MediaItem> {
     return mediaItemSchema.parse(await response.json());
 }
 
+/**
+ * Extracts the host segment from a URL or host:port string.
+ * Removes the port number and any trailing path segments.
+ *
+ * @param value - The URL or host:port string to extract from (e.g., "localhost:8081" or "192.168.1.1:3000")
+ * @returns The host segment without port, or `null` if the value is empty or invalid
+ *
+ * @example
+ * ```ts
+ * extractHostSegment("localhost:8081"); // "localhost"
+ * extractHostSegment("192.168.1.1:3000"); // "192.168.1.1"
+ * extractHostSegment(null); // null
+ * ```
+ */
 export function extractHostSegment(value?: string | null): string | null {
     if (!value) {
         return null;
@@ -100,6 +149,28 @@ export function extractHostSegment(value?: string | null): string | null {
     return host ? host : null;
 }
 
+/**
+ * Resolves the API base URL using multiple fallback strategies.
+ * This function attempts to determine the correct API endpoint based on:
+ * 1. Explicit `EXPO_PUBLIC_API_URL` environment variable
+ * 2. Expo Go configuration (hostUri from various manifest sources)
+ * 3. Native module script URL (for development servers)
+ * 4. Default localhost fallback
+ *
+ * @param constants - Expo constants object (defaults to `Constants`)
+ * @param nativeModules - React Native native modules (defaults to `NativeModules`)
+ * @param env - Environment variables object (defaults to `process.env`)
+ * @returns The resolved API base URL (e.g., "http://localhost:3000" or "http://192.168.1.1:3000")
+ *
+ * @example
+ * ```ts
+ * // Uses default parameters
+ * const apiUrl = resolveApiBaseUrl();
+ *
+ * // Or with custom parameters for testing
+ * const apiUrl = resolveApiBaseUrl(mockConstants, mockNativeModules, { EXPO_PUBLIC_API_URL: "https://api.example.com" });
+ * ```
+ */
 export function resolveApiBaseUrl(
     constants: ExpoConstantsLike = Constants,
     nativeModules: NativeModulesLike = NativeModules,

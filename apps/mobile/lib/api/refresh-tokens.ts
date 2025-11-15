@@ -3,6 +3,24 @@ import type { AuthResponse } from "../types";
 
 const API_BASE_URL = resolveApiBaseUrl();
 
+/**
+ * Makes a POST request to the API and parses the JSON response.
+ *
+ * @param path - The API endpoint path (relative to base URL)
+ * @param body - The request body to send (will be JSON stringified)
+ * @param parser - A function to parse and validate the response payload
+ * @returns A promise that resolves to the parsed response
+ * @throws {Error} If the request fails, response is not JSON, or parsing fails
+ *
+ * @example
+ * ```ts
+ * const response = await postJson(
+ *   "/api/v1/auth/refresh",
+ *   { refreshToken: "..." },
+ *   parseAuthResponse
+ * );
+ * ```
+ */
 async function postJson<T>(
     path: string,
     body: unknown,
@@ -71,6 +89,13 @@ async function postJson<T>(
     }
 }
 
+/**
+ * Parses and validates an authentication response from the API.
+ *
+ * @param value - The raw response value to parse
+ * @returns A validated AuthResponse object containing user and tokens
+ * @throws {Error} If the response structure is invalid or required fields are missing
+ */
 function parseAuthResponse(value: unknown): AuthResponse {
     if (typeof value !== "object" || value === null) {
         throw new Error("Auth response is not an object");
@@ -102,6 +127,14 @@ function parseAuthResponse(value: unknown): AuthResponse {
     };
 }
 
+/**
+ * Validates that a value is a non-empty string.
+ *
+ * @param value - The value to validate
+ * @param label - A label for the value (used in error messages)
+ * @returns The validated string value
+ * @throws {Error} If the value is not a non-empty string
+ */
 function expectString(value: unknown, label: string): string {
     if (typeof value !== "string" || value.length === 0) {
         throw new Error(`${label} must be a non-empty string`);
@@ -110,6 +143,27 @@ function expectString(value: unknown, label: string): string {
     return value;
 }
 
+/**
+ * Refreshes an authentication token pair using a refresh token.
+ * This function exchanges a valid refresh token for new access and refresh tokens.
+ *
+ * @param refreshToken - The refresh token to use for obtaining new tokens
+ * @returns A promise that resolves to an AuthResponse containing:
+ *   - `user`: The authenticated user object
+ *   - `accessToken`: A new access token
+ *   - `refreshToken`: A new refresh token
+ * @throws {Error} If the refresh token is invalid, expired, or the request fails
+ *
+ * @example
+ * ```ts
+ * try {
+ *   const { accessToken, refreshToken, user } = await refreshTokens(oldRefreshToken);
+ *   // Store new tokens and update user state
+ * } catch (error) {
+ *   // Handle refresh failure (e.g., redirect to login)
+ * }
+ * ```
+ */
 export async function refreshTokens(
     refreshToken: string
 ): Promise<AuthResponse> {
