@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
     ActivityIndicator,
     FlatList,
@@ -13,8 +13,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 
 import LoginScreen from "../../components/LoginScreen";
+import EditWatchlistEntryModal from "../../components/EditWatchlistEntryModal";
 import { fetchWatchlist, type WatchEntry } from "../../lib/watchlist";
 import { useAuthStore } from "../../lib/store/auth";
 import "../../lib/i18n";
@@ -137,6 +139,7 @@ function WatchlistCard({ item }: { item: WatchEntry }) {
     const router = useRouter();
     const colors = useTheme();
     const styles = createStyles(colors);
+    const [isEditModalVisible, setIsEditModalVisible] = useState(false);
 
     const handlePress = useCallback(() => {
         router.push({
@@ -145,59 +148,91 @@ function WatchlistCard({ item }: { item: WatchEntry }) {
         });
     }, [item.mediaItem.externalId, router]);
 
+    const handleEditPress = useCallback(
+        (e?: { stopPropagation?: () => void }) => {
+            e?.stopPropagation?.();
+            setIsEditModalVisible(true);
+        },
+        []
+    );
+
+    const handleCloseModal = useCallback(() => {
+        setIsEditModalVisible(false);
+    }, []);
+
     const statusLabel = item.status;
     const ratingLabel = item.rating
         ? `${item.rating}/10`
         : t("common.notAvailable");
 
     return (
-        <TouchableOpacity
-            accessibilityRole="button"
-            activeOpacity={0.85}
-            onPress={handlePress}
-            style={styles.card}
-            testID={`watchlist-card-${item.id}`}
-        >
-            <View style={styles.cardHeader}>
-                <Text style={styles.cardTitle} numberOfLines={1}>
-                    {item.mediaItem.title}
-                </Text>
-                <View style={styles.badgeContainer}>
-                    <View style={styles.badge}>
-                        <Text style={styles.badgeText}>
-                            {item.mediaItem.mediaType}
-                        </Text>
-                    </View>
-                    <View style={styles.statusBadge}>
-                        <Text style={styles.statusBadgeText}>
-                            {statusLabel}
-                        </Text>
+        <>
+            <TouchableOpacity
+                accessibilityRole="button"
+                activeOpacity={0.85}
+                onPress={handlePress}
+                style={styles.card}
+                testID={`watchlist-card-${item.id}`}
+            >
+                <View style={styles.cardHeader}>
+                    <Text style={styles.cardTitle} numberOfLines={1}>
+                        {item.mediaItem.title}
+                    </Text>
+                    <View style={styles.cardHeaderRight}>
+                        <View style={styles.badgeContainer}>
+                            <View style={styles.badge}>
+                                <Text style={styles.badgeText}>
+                                    {item.mediaItem.mediaType}
+                                </Text>
+                            </View>
+                            <View style={styles.statusBadge}>
+                                <Text style={styles.statusBadgeText}>
+                                    {statusLabel}
+                                </Text>
+                            </View>
+                        </View>
+                        <TouchableOpacity
+                            onPress={handleEditPress}
+                            style={styles.editButton}
+                            testID={`watchlist-card-edit-${item.id}`}
+                        >
+                            <Ionicons
+                                name="create-outline"
+                                size={20}
+                                color={colors.textSecondary}
+                            />
+                        </TouchableOpacity>
                     </View>
                 </View>
-            </View>
-            {item.mediaItem.description ? (
-                <Text numberOfLines={2} style={styles.cardDescription}>
-                    {item.mediaItem.description}
-                </Text>
-            ) : (
-                <Text style={styles.cardDescriptionMuted}>
-                    {t("home.emptyDescription")}
-                </Text>
-            )}
-            <View style={styles.cardMeta}>
-                <Text style={styles.cardMetaText}>
-                    {t("saved.meta", {
-                        status: statusLabel,
-                        rating: ratingLabel,
-                    })}
-                </Text>
-                {item.notes && (
-                    <Text numberOfLines={1} style={styles.cardNotes}>
-                        {item.notes}
+                {item.mediaItem.description ? (
+                    <Text numberOfLines={2} style={styles.cardDescription}>
+                        {item.mediaItem.description}
+                    </Text>
+                ) : (
+                    <Text style={styles.cardDescriptionMuted}>
+                        {t("home.emptyDescription")}
                     </Text>
                 )}
-            </View>
-        </TouchableOpacity>
+                <View style={styles.cardMeta}>
+                    <Text style={styles.cardMetaText}>
+                        {t("saved.meta", {
+                            status: statusLabel,
+                            rating: ratingLabel,
+                        })}
+                    </Text>
+                    {item.notes && (
+                        <Text numberOfLines={1} style={styles.cardNotes}>
+                            {item.notes}
+                        </Text>
+                    )}
+                </View>
+            </TouchableOpacity>
+            <EditWatchlistEntryModal
+                visible={isEditModalVisible}
+                entry={item}
+                onClose={handleCloseModal}
+            />
+        </>
     );
 }
 
@@ -281,6 +316,11 @@ const createStyles = (colors: ReturnType<typeof useTheme>) =>
             marginBottom: 8,
             gap: scale(8),
         },
+        cardHeaderRight: {
+            flexDirection: "row",
+            alignItems: "center",
+            gap: scale(8),
+        },
         cardTitle: {
             fontSize: fontSizes.lg,
             fontWeight: fontWeights.semiBold,
@@ -291,6 +331,10 @@ const createStyles = (colors: ReturnType<typeof useTheme>) =>
             flexDirection: "row",
             gap: scale(8),
             alignItems: "center",
+        },
+        editButton: {
+            padding: scale(4),
+            marginLeft: scale(4),
         },
         badge: {
             paddingVertical: verticalScale(4),

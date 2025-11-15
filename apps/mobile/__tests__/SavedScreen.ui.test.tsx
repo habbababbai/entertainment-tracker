@@ -416,4 +416,39 @@ describe("SavedScreen UI", () => {
             expect(getByText(`Movie ${status}`)).toBeTruthy();
         }
     });
+
+    it("displays edit button on watchlist card", async () => {
+        const entry = createWatchEntry();
+        fetchWatchlistMock.mockResolvedValue(createWatchlistResponse([entry]));
+
+        const { findByTestId } = renderSavedTab();
+
+        expect(await findByTestId("watchlist-card-edit-entry-1")).toBeTruthy();
+    });
+
+    it("opens edit modal when edit button is pressed", async () => {
+        const entry = createWatchEntry();
+        fetchWatchlistMock.mockResolvedValue(createWatchlistResponse([entry]));
+
+        const { findByTestId, getAllByText } = renderSavedTab();
+
+        const editButton = await findByTestId("watchlist-card-edit-entry-1");
+        fireEvent.press(editButton);
+
+        expect(getAllByText("Test Movie").length).toBeGreaterThan(0);
+        expect(getAllByText("Status").length).toBeGreaterThan(0);
+        expect(getAllByText("Rating").length).toBeGreaterThan(0);
+    });
+
+    it("does not navigate to media details when edit button is pressed", async () => {
+        const entry = createWatchEntry();
+        fetchWatchlistMock.mockResolvedValue(createWatchlistResponse([entry]));
+
+        const { findByTestId } = renderSavedTab();
+
+        const editButton = await findByTestId("watchlist-card-edit-entry-1");
+        fireEvent.press(editButton);
+
+        expect(mockPush).not.toHaveBeenCalled();
+    });
 });

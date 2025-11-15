@@ -2,11 +2,9 @@ import { useCallback, useMemo, useState } from "react";
 import {
     ActivityIndicator,
     Image,
-    Modal,
     ScrollView,
     StyleSheet,
     Text,
-    TextInput,
     TouchableOpacity,
     View,
 } from "react-native";
@@ -21,12 +19,12 @@ import {
     addToWatchlist,
     fetchWatchlistEntry,
     removeFromWatchlist,
-    updateWatchlistEntry,
     type WatchEntry,
 } from "../../lib/watchlist";
 import { useAuthStore } from "../../lib/store/auth";
 import { useTheme } from "../../lib/theme";
 import { fontSizes, fontWeights } from "../../lib/theme/fonts";
+import EditWatchlistEntryModal from "../../components/EditWatchlistEntryModal";
 import "../../lib/i18n";
 
 function formatDate(
@@ -64,8 +62,7 @@ export default function MediaDetailsScreen() {
     const styles = createStyles(colors);
     const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
-    const [showRatingModal, setShowRatingModal] = useState(false);
-    const [ratingInput, setRatingInput] = useState("");
+    const [showEditModal, setShowEditModal] = useState(false);
 
     const mediaId = useMemo(() => {
         if (Array.isArray(params.id)) {
@@ -160,28 +157,6 @@ export default function MediaDetailsScreen() {
         },
     });
 
-    const updateRatingMutation = useMutation({
-        mutationFn: (rating: number | null) => {
-            if (!externalId) {
-                throw new Error("Media item external ID not available");
-            }
-            return updateWatchlistEntry(externalId, { rating }).then(
-                (result) => ({
-                    result,
-                    externalId,
-                })
-            );
-        },
-        onSuccess: ({ result, externalId }) => {
-            queryClient.setQueryData(["watchlist-entry", externalId], result);
-            queryClient.invalidateQueries({ queryKey: ["watchlist"] });
-            setShowRatingModal(false);
-            setRatingInput("");
-        },
-        onError: (error) => {
-            console.error("Failed to update rating:", error);
-        },
-    });
 
     const handleSaveToggle = useCallback(() => {
         if (!externalId) {
@@ -199,36 +174,19 @@ export default function MediaDetailsScreen() {
         externalId,
     ]);
 
-    const handleRatingPress = useCallback(() => {
-        if (watchEntry?.rating) {
-            setRatingInput(String(watchEntry.rating));
-        } else {
-            setRatingInput("");
+    const handleEditPress = useCallback(() => {
+        if (watchEntry) {
+            setShowEditModal(true);
         }
-        setShowRatingModal(true);
     }, [watchEntry]);
 
-    const handleRatingSubmit = useCallback(() => {
-        const rating = parseInt(ratingInput.trim(), 10);
-        if (isNaN(rating) || rating < 1 || rating > 10) {
-            return;
-        }
-        updateRatingMutation.mutate(rating);
-    }, [ratingInput, updateRatingMutation]);
-
-    const handleRatingRemove = useCallback(() => {
-        updateRatingMutation.mutate(null, {
-            onSuccess: () => {
-                setShowRatingModal(false);
-                setRatingInput("");
-            },
-        });
-    }, [updateRatingMutation]);
+    const handleCloseEditModal = useCallback(() => {
+        setShowEditModal(false);
+    }, []);
 
     const isLoadingWatchlist =
         addToWatchlistMutation.isPending ||
-        removeFromWatchlistMutation.isPending ||
-        updateRatingMutation.isPending;
+        removeFromWatchlistMutation.isPending;
 
     const fallback = t("common.notAvailable");
     const releaseLabel = formatDate(data?.releaseDate, fallback);
@@ -358,7 +316,7 @@ export default function MediaDetailsScreen() {
                             {watchEntry && (
                                 <TouchableOpacity
                                     accessibilityRole="button"
-                                    onPress={handleRatingPress}
+                                    onPress={handleEditPress}
                                     disabled={isLoadingWatchlist}
                                     style={[
                                         styles.actionButton,
@@ -369,11 +327,7 @@ export default function MediaDetailsScreen() {
                                     activeOpacity={0.8}
                                 >
                                     <Text style={styles.actionButtonText}>
-                                        {watchEntry.rating
-                                            ? t("details.ratingWithValue", {
-                                                  rating: watchEntry.rating,
-                                              })
-                                            : t("details.addRating")}
+                                        {t("details.editWatchlist")}
                                     </Text>
                                 </TouchableOpacity>
                             )}
@@ -402,99 +356,13 @@ export default function MediaDetailsScreen() {
                         </Text>
                     </View>
                 </ScrollView>
-                <Modal
-                    visible={showRatingModal}
-                    transparent
-                    animationType="fade"
-                    onRequestClose={() => setShowRatingModal(false)}
-                >
-                    <View style={styles.modalOverlay}>
-                        <View style={styles.modalContent}>
-                            <Text style={styles.modalTitle}>
-                                {t("details.ratingModalTitle")}
-                            </Text>
-                            <TextInput
-                                value={ratingInput}
-                                onChangeText={setRatingInput}
-                                placeholder={t("details.ratingPlaceholder")}
-                                keyboardType="numeric"
-                                maxLength={2}
-                                style={styles.ratingInput}
-                                autoFocus
-                            />
-                            <Text style={styles.ratingHint}>
-                                {t("details.ratingHint")}
-                            </Text>
-                            <View style={styles.modalButtons}>
-                                {watchEntry?.rating && (
-                                    <TouchableOpacity
-                                        onPress={handleRatingRemove}
-                                        disabled={
-                                            updateRatingMutation.isPending
-                                        }
-                                        style={[
-                                            styles.modalButton,
-                                            styles.modalButtonRemove,
-                                        ]}
-                                        activeOpacity={0.8}
-                                    >
-                                        <Text
-                                            style={styles.modalButtonRemoveText}
-                                        >
-                                            {t("details.removeRating")}
-                                        </Text>
-                                    </TouchableOpacity>
-                                )}
-                                <TouchableOpacity
-                                    onPress={handleRatingSubmit}
-                                    disabled={
-                                        updateRatingMutation.isPending ||
-                                        !ratingInput.trim()
-                                    }
-                                    style={[
-                                        styles.modalButton,
-                                        styles.modalButtonPrimary,
-                                        (!ratingInput.trim() ||
-                                            updateRatingMutation.isPending) &&
-                                            styles.modalButtonDisabled,
-                                    ]}
-                                    activeOpacity={0.8}
-                                >
-                                    {updateRatingMutation.isPending ? (
-                                        <ActivityIndicator
-                                            size="small"
-                                            color={colors.accentOnAccent}
-                                        />
-                                    ) : (
-                                        <Text
-                                            style={
-                                                styles.modalButtonPrimaryText
-                                            }
-                                        >
-                                            {t("details.saveRating")}
-                                        </Text>
-                                    )}
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    onPress={() => {
-                                        setShowRatingModal(false);
-                                        setRatingInput("");
-                                    }}
-                                    disabled={updateRatingMutation.isPending}
-                                    style={[
-                                        styles.modalButton,
-                                        styles.modalButtonCancel,
-                                    ]}
-                                    activeOpacity={0.8}
-                                >
-                                    <Text style={styles.modalButtonCancelText}>
-                                        {t("common.cancel")}
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    </View>
-                </Modal>
+                {watchEntry && (
+                    <EditWatchlistEntryModal
+                        visible={showEditModal}
+                        entry={watchEntry}
+                        onClose={handleCloseEditModal}
+                    />
+                )}
             </>
         );
     })();
@@ -625,82 +493,6 @@ const createStyles = (colors: ReturnType<typeof useTheme>) =>
     ratingButton: {
         flex: 0,
         paddingHorizontal: scale(12),
-    },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        justifyContent: "center",
-        alignItems: "center",
-        padding: scale(20),
-    },
-    modalContent: {
-        backgroundColor: colors.surface,
-        borderRadius: moderateScale(16),
-        padding: scale(24),
-        width: "100%",
-        maxWidth: scale(400),
-        gap: verticalScale(16),
-    },
-    modalTitle: {
-        fontSize: fontSizes.lg,
-        fontWeight: fontWeights.semiBold,
-        color: colors.textPrimary,
-        textAlign: "center",
-    },
-    ratingInput: {
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: moderateScale(10),
-        paddingHorizontal: scale(16),
-        paddingVertical: verticalScale(12),
-        fontSize: fontSizes.md,
-        backgroundColor: colors.background,
-        color: colors.textPrimary,
-        textAlign: "center",
-    },
-    ratingHint: {
-        fontSize: fontSizes.sm,
-        color: colors.textSecondary,
-        textAlign: "center",
-    },
-    modalButtons: {
-        gap: verticalScale(8),
-    },
-    modalButton: {
-        paddingVertical: verticalScale(12),
-        paddingHorizontal: scale(16),
-        borderRadius: moderateScale(10),
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    modalButtonPrimary: {
-        backgroundColor: colors.accent,
-    },
-    modalButtonPrimaryText: {
-        color: colors.accentOnAccent,
-        fontSize: fontSizes.md,
-        fontWeight: fontWeights.semiBold,
-    },
-    modalButtonRemove: {
-        backgroundColor: colors.error,
-    },
-    modalButtonRemoveText: {
-        color: colors.accentOnAccent,
-        fontSize: fontSizes.md,
-        fontWeight: fontWeights.semiBold,
-    },
-    modalButtonCancel: {
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.border,
-    },
-    modalButtonCancelText: {
-        color: colors.textPrimary,
-        fontSize: fontSizes.md,
-        fontWeight: fontWeights.medium,
-    },
-    modalButtonDisabled: {
-        opacity: 0.6,
     },
     metadata: {
         fontSize: fontSizes.sm,

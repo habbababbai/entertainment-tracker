@@ -26,10 +26,6 @@ jest.mock("@react-native-async-storage/async-storage", () => ({
     multiRemove: jest.fn(),
 }));
 
-jest.mock("../lib/api/refresh-tokens", () => ({
-    refreshTokens: jest.fn(),
-}));
-
 const mockIsTokenExpired = jest.fn();
 const mockIsTokenExpiringSoon = jest.fn();
 
