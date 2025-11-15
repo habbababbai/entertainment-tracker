@@ -4,6 +4,7 @@ export const en = {
         pullToRetry: "Pull to retry.",
         notAvailable: "N/A",
         cancel: "Cancel",
+        save: "Save",
     },
     home: {
         title: "Entertainment Tracker",
@@ -36,6 +37,7 @@ export const en = {
         addToWatchlist: "Save",
         removeFromWatchlist: "Remove",
         addRating: "Rate",
+        editWatchlist: "Edit",
         ratingWithValue: "Rating: {{rating}}/10",
         ratingModalTitle: "Rate this title",
         ratingPlaceholder: "1-10",
@@ -50,6 +52,10 @@ export const en = {
         errorHeading: "Unable to load watchlist.",
         emptyList: "No saved items yet.",
         meta: "Status: {{status}} • Rating: {{rating}}",
+        edit: {
+            status: "Status",
+            rating: "Rating",
+        },
     },
 };
 
