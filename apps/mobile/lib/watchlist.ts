@@ -10,11 +10,26 @@ import {
 } from "@entertainment-tracker/contracts";
 import { resolveApiBaseUrl } from "./media";
 import { useAuthStore } from "./store/auth";
+import { isTokenExpiringSoon } from "./utils/jwt";
 
 const API_BASE_URL = resolveApiBaseUrl();
 
 function getAccessToken(): string | null {
     return useAuthStore.getState().accessToken;
+}
+
+class NetworkError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "NetworkError";
+    }
+}
+
+class AuthenticationError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "AuthenticationError";
+    }
 }
 
 async function extractErrorMessage(
@@ -75,13 +90,14 @@ async function authenticatedFetch<T>(
     path: string,
     options: RequestInit,
     parser: (value: unknown) => T,
-    retryOn401 = true
+    retryOn401 = true,
+    maxRetries = 1
 ): Promise<T> {
     const url = new URL(path, API_BASE_URL).toString();
 
     let accessToken = getAccessToken();
     if (!accessToken) {
-        throw new Error("Not authenticated");
+        throw new AuthenticationError("Not authenticated");
     }
 
     const hasBody = options.body !== undefined && options.body !== null;
@@ -94,37 +110,75 @@ async function authenticatedFetch<T>(
         headers["Content-Type"] = "application/json";
     }
 
-    let response = await fetch(url, {
-        ...options,
-        headers,
-    });
-
-    if (response.status === 401 && retryOn401) {
-        const refreshSuccess = await useAuthStore
-            .getState()
-            .refreshAccessToken();
-
-        if (!refreshSuccess) {
-            throw new Error("Authentication required");
+    if (isTokenExpiringSoon(accessToken, 60) && retryOn401) {
+        await useAuthStore.getState().refreshAccessToken();
+        accessToken = getAccessToken();
+        if (accessToken) {
+            headers.Authorization = `Bearer ${accessToken}`;
         }
-
-        const newAccessToken = getAccessToken();
-        if (!newAccessToken) {
-            throw new Error("Authentication required");
-        }
-
-        headers = {
-            ...headers,
-            Authorization: `Bearer ${newAccessToken}`,
-        };
-
-        response = await fetch(url, {
-            ...options,
-            headers,
-        });
     }
 
-    return parseResponse(response, parser);
+    let retryCount = 0;
+    let lastError: Error | null = null;
+
+    while (retryCount <= maxRetries) {
+        try {
+            const response = await fetch(url, {
+                ...options,
+                headers,
+            });
+
+            if (
+                response.status === 401 &&
+                retryOn401 &&
+                retryCount < maxRetries
+            ) {
+                const refreshSuccess = await useAuthStore
+                    .getState()
+                    .refreshAccessToken();
+
+                if (!refreshSuccess) {
+                    throw new AuthenticationError("Authentication required");
+                }
+
+                const newAccessToken = getAccessToken();
+                if (!newAccessToken) {
+                    throw new AuthenticationError("Authentication required");
+                }
+
+                headers = {
+                    ...headers,
+                    Authorization: `Bearer ${newAccessToken}`,
+                };
+
+                retryCount++;
+                continue;
+            }
+
+            return parseResponse(response, parser);
+        } catch (error) {
+            if (error instanceof AuthenticationError) {
+                throw error;
+            }
+
+            if (error instanceof TypeError && error.message.includes("fetch")) {
+                throw new NetworkError(
+                    error.message || "Network request failed"
+                );
+            }
+
+            lastError =
+                error instanceof Error ? error : new Error(String(error));
+
+            if (retryCount >= maxRetries) {
+                throw lastError;
+            }
+
+            retryCount++;
+        }
+    }
+
+    throw lastError || new Error("Request failed");
 }
 
 export type {

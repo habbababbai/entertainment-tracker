@@ -6,6 +6,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { AuthUser, AuthTokens, AuthResponse } from "../types";
 import { refreshTokens } from "../auth";
 import { isTestEnv } from "../utils/env";
+import { isTokenExpired, isTokenExpiringSoon } from "../utils/jwt";
 
 const TOKEN_KEYS = {
     accessToken: "auth-access-token",
@@ -156,9 +157,18 @@ export const useAuthStore = create<AuthState>()(
                 }
 
                 const currentRefreshToken = state.refreshToken;
+                const currentAccessToken = state.accessToken;
 
                 if (!currentRefreshToken) {
                     return false;
+                }
+
+                if (
+                    currentAccessToken &&
+                    !isTokenExpired(currentAccessToken) &&
+                    !isTokenExpiringSoon(currentAccessToken, 60)
+                ) {
+                    return true;
                 }
 
                 const refreshPromise = (async () => {
