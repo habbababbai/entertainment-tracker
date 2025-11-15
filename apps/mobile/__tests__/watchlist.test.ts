@@ -47,8 +47,13 @@ jest.mock("../lib/store/auth", () => ({
     useAuthStore: {
         getState: jest.fn(() => ({
             accessToken: "test-access-token",
+            refreshAccessToken: jest.fn().mockResolvedValue(true),
         })),
     },
+}));
+
+jest.mock("../lib/utils/jwt", () => ({
+    isTokenExpiringSoon: jest.fn(() => false),
 }));
 
 async function loadModule(accessToken: string | null = "test-access-token") {
@@ -57,8 +62,12 @@ async function loadModule(accessToken: string | null = "test-access-token") {
     authModule.useAuthStore = {
         getState: jest.fn(() => ({
             accessToken,
+            refreshAccessToken: jest.fn().mockResolvedValue(true),
         })),
     };
+
+    const jwtModule = jest.requireMock("../lib/utils/jwt");
+    jwtModule.isTokenExpiringSoon.mockReturnValue(false);
 
     return jest.requireActual<typeof import("../lib/watchlist")>(
         "../lib/watchlist"

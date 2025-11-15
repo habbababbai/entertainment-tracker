@@ -4,6 +4,17 @@ const originalFetch = globalThis.fetch;
 const fetchMock = jest.fn();
 let originalApiUrl: string | undefined;
 
+jest.mock("@react-native-async-storage/async-storage", () => ({
+    getItem: jest.fn(),
+    setItem: jest.fn(),
+    removeItem: jest.fn(),
+    multiGet: jest.fn(),
+    multiSet: jest.fn(),
+    clear: jest.fn(),
+    getAllKeys: jest.fn(),
+    multiRemove: jest.fn(),
+}));
+
 const mockGetState = jest.fn();
 
 jest.mock("../lib/store/auth", () => {
@@ -40,6 +51,13 @@ async function loadModule() {
 
 beforeEach(() => {
     fetchMock.mockReset();
+    mockGetState.mockReset();
+    mockGetState.mockReturnValue({
+        user: null,
+        accessToken: null,
+        refreshToken: null,
+        isAuthenticated: false,
+    });
     globalThis.fetch = fetchMock as unknown as typeof fetch;
     originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
     process.env.EXPO_PUBLIC_API_URL = "https://api.example.test";

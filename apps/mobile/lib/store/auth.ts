@@ -129,6 +129,16 @@ export const useAuthStore = create<AuthState>()(
                     user: state.user ? { ...state.user, ...updates } : null,
                 })),
             loadTokens: async () => {
+                const currentState = get();
+                if (currentState.user === null) {
+                    set({
+                        accessToken: null,
+                        refreshToken: null,
+                        isAuthenticated: false,
+                    });
+                    return;
+                }
+
                 const [accessToken, refreshToken] = await Promise.all([
                     secureStorage.getItem(TOKEN_KEYS.accessToken),
                     secureStorage.getItem(TOKEN_KEYS.refreshToken),
@@ -138,14 +148,13 @@ export const useAuthStore = create<AuthState>()(
                     set({
                         accessToken,
                         refreshToken,
-                        isAuthenticated: !!get().user,
+                        isAuthenticated: true,
                     });
                 } else {
                     set({
                         accessToken: null,
                         refreshToken: null,
                         isAuthenticated: false,
-                        user: null,
                     });
                 }
             },
@@ -198,8 +207,10 @@ export const useAuthStore = create<AuthState>()(
                 user: state.user,
                 isAuthenticated: state.isAuthenticated,
             }),
-            onRehydrateStorage: () => async () => {
-                await useAuthStore.getState().loadTokens();
+            onRehydrateStorage: () => async (state) => {
+                if (state && state.user !== null) {
+                    await useAuthStore.getState().loadTokens();
+                }
             },
         }
     )
