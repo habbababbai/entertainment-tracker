@@ -5,12 +5,8 @@ import type {
 } from "@entertainment-tracker/contracts";
 
 import { conflict, notFound } from "../../lib/http-errors.js";
-import {
-    mapOmdbDetail,
-} from "../../lib/omdb/index.js";
-import {
-    type OmdbDetailResponse,
-} from "../../types/omdb.js";
+import { mapOmdbDetail } from "../../lib/omdb/index.js";
+import { type OmdbDetailResponse } from "../../types/omdb.js";
 import { requestOmdb } from "../../lib/omdb/index.js";
 
 const watchEntrySchema = {
@@ -69,10 +65,20 @@ const errorResponseSchema = {
     required: ["statusCode", "error", "message"],
 } as const;
 
-
 type AddWatchlistBody = AddWatchlistRequest;
 type UpdateWatchlistBody = UpdateWatchlistRequest;
 
+/**
+ * Resolves a media item ID by checking the database first, then fetching from OMDb if needed.
+ * Accepts either an internal database ID or an external ID (IMDb ID).
+ * If the media item doesn't exist in the database, fetches it from OMDb and creates/updates it.
+ *
+ * @param app - The Fastify instance (for database and OMDb access)
+ * @param mediaItemId - Either the internal database ID or external ID (IMDb ID)
+ * @returns A promise that resolves to the internal database ID
+ * @throws {HttpError} If the media item is not found in OMDb
+ * @throws {Error} If OMDb API returns an error
+ */
 async function resolveMediaItemId(
     app: FastifyInstance,
     mediaItemId: string
@@ -183,7 +189,10 @@ export const watchlistRoutes: FastifyPluginAsync = async (
             const { mediaItemId } = request.body as AddWatchlistBody;
             const userId = request.user.id;
 
-            const internalMediaItemId = await resolveMediaItemId(app, mediaItemId);
+            const internalMediaItemId = await resolveMediaItemId(
+                app,
+                mediaItemId
+            );
 
             const existingEntry = await app.prisma.watchEntry.findUnique({
                 where: {
@@ -258,7 +267,10 @@ export const watchlistRoutes: FastifyPluginAsync = async (
             const { mediaItemId } = request.params as { mediaItemId: string };
             const userId = request.user.id;
 
-            const internalMediaItemId = await resolveMediaItemId(app, mediaItemId);
+            const internalMediaItemId = await resolveMediaItemId(
+                app,
+                mediaItemId
+            );
 
             const watchEntry = await app.prisma.watchEntry.findUnique({
                 where: {
@@ -407,7 +419,10 @@ export const watchlistRoutes: FastifyPluginAsync = async (
             const userId = request.user.id;
             const body = request.body as UpdateWatchlistBody;
 
-            const internalMediaItemId = await resolveMediaItemId(app, mediaItemId);
+            const internalMediaItemId = await resolveMediaItemId(
+                app,
+                mediaItemId
+            );
 
             const watchEntry = await app.prisma.watchEntry.findUnique({
                 where: {
@@ -513,7 +528,10 @@ export const watchlistRoutes: FastifyPluginAsync = async (
             const { mediaItemId } = request.params as { mediaItemId: string };
             const userId = request.user.id;
 
-            const internalMediaItemId = await resolveMediaItemId(app, mediaItemId);
+            const internalMediaItemId = await resolveMediaItemId(
+                app,
+                mediaItemId
+            );
 
             const watchEntry = await app.prisma.watchEntry.findUnique({
                 where: {
@@ -536,6 +554,13 @@ export const watchlistRoutes: FastifyPluginAsync = async (
     );
 };
 
+/**
+ * Serializes a watchlist entry database object to a safe format for API responses.
+ * Converts Date objects to ISO strings for proper JSON serialization.
+ *
+ * @param entry - The watchlist entry object from Prisma
+ * @returns A serialized watchlist entry object safe for API responses
+ */
 function serializeWatchEntry(entry: {
     id: string;
     userId: string;
