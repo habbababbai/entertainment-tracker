@@ -3,6 +3,7 @@ import {
     ActivityIndicator,
     FlatList,
     RefreshControl,
+    ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -17,11 +18,14 @@ import { Ionicons } from "@expo/vector-icons";
 
 import LoginScreen from "../../components/LoginScreen";
 import EditWatchlistEntryModal from "../../components/EditWatchlistEntryModal";
+import SearchBar from "../../components/SearchBar";
 import { fetchWatchlist, type WatchEntry } from "../../lib/watchlist";
 import { useAuthStore } from "../../lib/store/auth";
 import "../../lib/i18n";
 import { useTheme } from "../../lib/theme";
 import { fontSizes, fontWeights } from "../../lib/theme/fonts";
+
+type SortType = "date" | "year" | "name" | "type" | "status";
 
 export default function SavedTab() {
     const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -38,6 +42,9 @@ function SavedScreen() {
     const colors = useTheme();
     const styles = createStyles(colors);
 
+    const [searchQuery, setSearchQuery] = useState("");
+    const [sortType, setSortType] = useState<SortType>("date");
+
     const { data, isLoading, isError, error, refetch, isRefetching } = useQuery(
         {
             queryKey: ["watchlist"],
@@ -46,12 +53,79 @@ function SavedScreen() {
         }
     );
 
-    const items = data?.items ?? [];
-    const showEmptyState = !isLoading && !isError && items.length === 0;
+    const allItems = data?.items ?? [];
+
+    const filteredAndSortedItems = useMemo(() => {
+        let filtered = allItems;
+
+        if (searchQuery.trim()) {
+            const query = searchQuery.trim().toLowerCase();
+            filtered = allItems.filter((item) => {
+                const title = item.mediaItem.title.toLowerCase();
+                const description =
+                    item.mediaItem.description?.toLowerCase() ?? "";
+                return title.includes(query) || description.includes(query);
+            });
+        }
+
+        const sorted = [...filtered].sort((a, b) => {
+            switch (sortType) {
+                case "year": {
+                    const yearA = a.mediaItem.releaseDate
+                        ? new Date(a.mediaItem.releaseDate).getFullYear()
+                        : 0;
+                    const yearB = b.mediaItem.releaseDate
+                        ? new Date(b.mediaItem.releaseDate).getFullYear()
+                        : 0;
+                    return yearB - yearA;
+                }
+                case "name": {
+                    return a.mediaItem.title.localeCompare(
+                        b.mediaItem.title,
+                        undefined,
+                        { sensitivity: "base" }
+                    );
+                }
+                case "type": {
+                    return a.mediaItem.mediaType.localeCompare(
+                        b.mediaItem.mediaType,
+                        undefined,
+                        { sensitivity: "base" }
+                    );
+                }
+                case "status": {
+                    return a.status.localeCompare(b.status, undefined, {
+                        sensitivity: "base",
+                    });
+                }
+                case "date":
+                default: {
+                    return (
+                        new Date(b.createdAt).getTime() -
+                        new Date(a.createdAt).getTime()
+                    );
+                }
+            }
+        });
+
+        return sorted;
+    }, [allItems, searchQuery, sortType]);
+
+    const items = filteredAndSortedItems;
+    const showEmptyState = !isLoading && !isError && allItems.length === 0;
+    const showNoResults =
+        !isLoading &&
+        !isError &&
+        allItems.length > 0 &&
+        filteredAndSortedItems.length === 0;
 
     const handleRefresh = useCallback(() => {
         void refetch();
     }, [refetch]);
+
+    const handleSearchSubmit = useCallback(() => {
+        // Search is filtered in useMemo, no action needed
+    }, []);
 
     const listEmptyComponent = useMemo(() => {
         if (isLoading) {
@@ -92,24 +166,80 @@ function SavedScreen() {
             );
         }
 
+        if (showNoResults) {
+            return (
+                <View style={styles.centerContent}>
+                    <Text style={styles.statusText}>
+                        {t("saved.noResults")}
+                    </Text>
+                </View>
+            );
+        }
+
         return null;
-    }, [error?.message, isError, isLoading, showEmptyState, t]);
+    }, [error?.message, isError, isLoading, showEmptyState, showNoResults, t]);
 
     const listContentStyle = useMemo(
         () => [
             styles.listContent,
-            (isError || showEmptyState || isLoading) &&
+            (isError || showEmptyState || showNoResults || isLoading) &&
                 styles.listContentCentered,
             items.length > 0 && styles.listContentTop,
         ],
-        [isError, isLoading, showEmptyState, items.length]
+        [isError, isLoading, showEmptyState, showNoResults, items.length]
     );
+
+    const sortOptions: { value: SortType; label: string }[] = [
+        { value: "date", label: t("saved.sortByDate") },
+        { value: "name", label: t("saved.sortByName") },
+        { value: "type", label: t("saved.sortByType") },
+        { value: "year", label: t("saved.sortByYear") },
+        { value: "status", label: t("saved.sortByStatus") },
+    ];
 
     return (
         <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
             <View style={styles.wrapper}>
                 <Text style={styles.title}>{t("saved.title")}</Text>
                 <Text style={styles.subtitle}>{t("saved.subtitle")}</Text>
+
+                <SearchBar
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    onSubmit={handleSearchSubmit}
+                    placeholder={t("saved.searchPlaceholder")}
+                />
+
+                <View style={styles.sortContainer}>
+                    <Text style={styles.sortLabel}>{t("saved.sortBy")}:</Text>
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.sortOptions}
+                    >
+                        {sortOptions.map((option) => (
+                            <TouchableOpacity
+                                key={option.value}
+                                onPress={() => setSortType(option.value)}
+                                style={[
+                                    styles.sortButton,
+                                    sortType === option.value &&
+                                        styles.sortButtonActive,
+                                ]}
+                            >
+                                <Text
+                                    style={[
+                                        styles.sortButtonText,
+                                        sortType === option.value &&
+                                            styles.sortButtonTextActive,
+                                    ]}
+                                >
+                                    {option.label}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
 
                 <FlatList
                     testID="watchlist-list"
@@ -380,5 +510,41 @@ const createStyles = (colors: ReturnType<typeof useTheme>) =>
             fontSize: fontSizes.sm,
             color: colors.textSecondary,
             fontStyle: "italic",
+        },
+        sortContainer: {
+            flexDirection: "row",
+            alignItems: "center",
+            marginBottom: verticalScale(16),
+            gap: scale(8),
+        },
+        sortLabel: {
+            fontSize: fontSizes.sm,
+            fontWeight: fontWeights.medium,
+            color: colors.textSecondary,
+        },
+        sortOptions: {
+            flexDirection: "row",
+            gap: scale(8),
+            paddingRight: scale(12),
+        },
+        sortButton: {
+            paddingVertical: verticalScale(6),
+            paddingHorizontal: scale(12),
+            borderRadius: moderateScale(16),
+            backgroundColor: colors.surface,
+            borderWidth: 1,
+            borderColor: colors.border,
+        },
+        sortButtonActive: {
+            backgroundColor: colors.accent,
+            borderColor: colors.accent,
+        },
+        sortButtonText: {
+            fontSize: fontSizes.sm,
+            fontWeight: fontWeights.medium,
+            color: colors.textPrimary,
+        },
+        sortButtonTextActive: {
+            color: colors.accentOnAccent,
         },
     });
