@@ -18,7 +18,7 @@ import { useRouter } from "expo-router";
 
 import { loginUser, resetPasswordForLoggedInUser } from "../lib/auth";
 import { useAuthStore } from "../lib/store/auth";
-import { colors } from "../lib/theme/colors";
+import { useTheme } from "../lib/theme";
 import { fontSizes, fontWeights } from "../lib/theme/fonts";
 
 export default function ResetPasswordScreen() {
@@ -30,6 +30,8 @@ export default function ResetPasswordScreen() {
 
     const router = useRouter();
     const insets = useSafeAreaInsets();
+    const colors = useTheme();
+    const styles = createStyles(colors);
     const user = useAuthStore((state) => state.user);
     const setAuthFromResponse = useAuthStore(
         (state) => state.setAuthFromResponse
@@ -199,90 +201,91 @@ export default function ResetPasswordScreen() {
     );
 }
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: colors.background,
-    },
-    backButton: {
-        position: "absolute",
-        left: scale(16),
-        zIndex: 1,
-        paddingVertical: verticalScale(8),
-        paddingHorizontal: scale(12),
-    },
-    content: {
-        flex: 1,
-        paddingHorizontal: scale(24),
-        paddingVertical: verticalScale(32),
-        justifyContent: "center",
-    },
-    backButtonText: {
-        fontSize: fontSizes.md,
-        color: colors.accent,
-        fontWeight: fontWeights.medium,
-    },
-    title: {
-        fontSize: moderateScale(32),
-        fontWeight: fontWeights.bold,
-        color: colors.textPrimary,
-        textAlign: "center",
-        marginBottom: verticalScale(8),
-    },
-    subtitle: {
-        fontSize: fontSizes.md,
-        color: colors.textSecondary,
-        textAlign: "center",
-        marginBottom: verticalScale(32),
-    },
-    form: {
-        gap: verticalScale(20),
-    },
-    inputContainer: {
-        gap: verticalScale(8),
-    },
-    label: {
-        fontSize: fontSizes.sm,
-        fontWeight: fontWeights.medium,
-        color: colors.textPrimary,
-    },
-    input: {
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: moderateScale(10),
-        paddingHorizontal: scale(16),
-        paddingVertical: verticalScale(12),
-        fontSize: fontSizes.md,
-        backgroundColor: colors.surface,
-        color: colors.textPrimary,
-    },
-    errorContainer: {
-        padding: scale(12),
-        backgroundColor: colors.errorMuted,
-        borderRadius: moderateScale(8),
-    },
-    errorText: {
-        color: colors.error,
-        fontSize: fontSizes.sm,
-        textAlign: "center",
-    },
-    button: {
-        backgroundColor: colors.accent,
-        paddingVertical: verticalScale(14),
-        borderRadius: moderateScale(10),
-        alignItems: "center",
-        justifyContent: "center",
-        marginTop: verticalScale(8),
-    },
-    buttonDisabled: {
-        opacity: 0.6,
-    },
-    buttonText: {
-        color: colors.accentOnAccent,
-        fontSize: fontSizes.md,
-        fontWeight: fontWeights.semiBold,
-    },
-    activityIndicator: {
-        marginTop: verticalScale(24),
-    },
-});
+const createStyles = (colors: ReturnType<typeof useTheme>) =>
+    StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: colors.background,
+        },
+        backButton: {
+            position: "absolute",
+            left: scale(16),
+            zIndex: 1,
+            paddingVertical: verticalScale(8),
+            paddingHorizontal: scale(12),
+        },
+        content: {
+            flex: 1,
+            paddingHorizontal: scale(24),
+            paddingVertical: verticalScale(32),
+            justifyContent: "center",
+        },
+        backButtonText: {
+            fontSize: fontSizes.md,
+            color: colors.accent,
+            fontWeight: fontWeights.medium,
+        },
+        title: {
+            fontSize: moderateScale(32),
+            fontWeight: fontWeights.bold,
+            color: colors.textPrimary,
+            textAlign: "center",
+            marginBottom: verticalScale(8),
+        },
+        subtitle: {
+            fontSize: fontSizes.md,
+            color: colors.textSecondary,
+            textAlign: "center",
+            marginBottom: verticalScale(32),
+        },
+        form: {
+            gap: verticalScale(20),
+        },
+        inputContainer: {
+            gap: verticalScale(8),
+        },
+        label: {
+            fontSize: fontSizes.sm,
+            fontWeight: fontWeights.medium,
+            color: colors.textPrimary,
+        },
+        input: {
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: moderateScale(10),
+            paddingHorizontal: scale(16),
+            paddingVertical: verticalScale(12),
+            fontSize: fontSizes.md,
+            backgroundColor: colors.surface,
+            color: colors.textPrimary,
+        },
+        errorContainer: {
+            padding: scale(12),
+            backgroundColor: colors.errorMuted,
+            borderRadius: moderateScale(8),
+        },
+        errorText: {
+            color: colors.error,
+            fontSize: fontSizes.sm,
+            textAlign: "center",
+        },
+        button: {
+            backgroundColor: colors.accent,
+            paddingVertical: verticalScale(14),
+            borderRadius: moderateScale(10),
+            alignItems: "center",
+            justifyContent: "center",
+            marginTop: verticalScale(8),
+        },
+        buttonDisabled: {
+            opacity: 0.6,
+        },
+        buttonText: {
+            color: colors.accentOnAccent,
+            fontSize: fontSizes.md,
+            fontWeight: fontWeights.semiBold,
+        },
+        activityIndicator: {
+            marginTop: verticalScale(24),
+        },
+    });

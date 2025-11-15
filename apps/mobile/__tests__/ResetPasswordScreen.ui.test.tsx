@@ -17,6 +17,17 @@ const mockReplace = jest.fn();
 const mockBack = jest.fn();
 const mockCanGoBack = jest.fn(() => true);
 
+jest.mock("@react-native-async-storage/async-storage", () => ({
+    getItem: jest.fn(),
+    setItem: jest.fn(),
+    removeItem: jest.fn(),
+    multiGet: jest.fn(),
+    multiSet: jest.fn(),
+    clear: jest.fn(),
+    getAllKeys: jest.fn(),
+    multiRemove: jest.fn(),
+}));
+
 jest.mock("expo-router", () => ({
     useRouter: () => ({
         push: mockPush,

@@ -18,7 +18,7 @@ import { useRouter } from "expo-router";
 
 import { registerUser } from "../lib/auth";
 import { useAuthStore } from "../lib/store/auth";
-import { colors } from "../lib/theme/colors";
+import { useTheme } from "../lib/theme";
 import { fontSizes, fontWeights } from "../lib/theme/fonts";
 
 export default function RegisterScreen() {
@@ -30,6 +30,8 @@ export default function RegisterScreen() {
 
     const router = useRouter();
     const insets = useSafeAreaInsets();
+    const colors = useTheme();
+    const styles = createStyles(colors);
     const setAuthFromResponse = useAuthStore(
         (state) => state.setAuthFromResponse
     );
@@ -193,11 +195,12 @@ export default function RegisterScreen() {
     );
 }
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: colors.background,
-    },
+const createStyles = (colors: ReturnType<typeof useTheme>) =>
+    StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: colors.background,
+        },
     backButton: {
         position: "absolute",
         left: scale(16),
@@ -286,9 +289,9 @@ const styles = StyleSheet.create({
         fontSize: fontSizes.sm,
         color: colors.textSecondary,
     },
-    linkText: {
-        fontSize: fontSizes.sm,
-        color: colors.accent,
-        fontWeight: fontWeights.semiBold,
-    },
-});
+        linkText: {
+            fontSize: fontSizes.sm,
+            color: colors.accent,
+            fontWeight: fontWeights.semiBold,
+        },
+    });

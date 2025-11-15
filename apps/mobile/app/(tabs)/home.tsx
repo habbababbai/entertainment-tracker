@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     FlatList,
@@ -18,22 +18,31 @@ import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 import { useRouter } from "expo-router";
 
 import { fetchMedia, type MediaItem, type MediaList } from "../../lib/media";
+import { useHomeStore } from "../../lib/store";
 import "../../lib/i18n";
-import { colors } from "../../lib/theme/colors";
+import { useTheme } from "../../lib/theme";
 import { fontSizes, fontWeights } from "../../lib/theme/fonts";
 
 const PAGE_SIZE = 15;
 
-type HomeScreenProps = {
-    initialQuery?: string;
-};
-
-export default function HomeScreen({
-    initialQuery = "chainsaw man",
-}: HomeScreenProps = {}) {
-    const [search, setSearch] = useState(initialQuery);
-    const [submittedSearch, setSubmittedSearch] = useState(initialQuery);
+export default function HomeScreen() {
+    const {
+        submittedSearch,
+        scrollOffset,
+        setSubmittedSearch,
+        setScrollOffset,
+    } = useHomeStore();
+    const [search, setSearch] = useState(submittedSearch);
+    const [hasRestoredScroll, setHasRestoredScroll] = useState(false);
+    const flatListRef = useRef<FlatList<MediaItem>>(null);
+    const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const { t } = useTranslation();
+    const colors = useTheme();
+    const styles = createStyles(colors);
+
+    useEffect(() => {
+        setSearch(submittedSearch);
+    }, [submittedSearch]);
 
     const {
         data,
@@ -68,12 +77,57 @@ export default function HomeScreen({
         [data]
     );
 
+    const handleScroll = useCallback(
+        (event: { nativeEvent: { contentOffset: { y: number } } }) => {
+            const offset = event.nativeEvent.contentOffset.y;
+            if (scrollTimeoutRef.current) {
+                clearTimeout(scrollTimeoutRef.current);
+            }
+            scrollTimeoutRef.current = setTimeout(() => {
+                setScrollOffset(offset);
+            }, 300);
+        },
+        [setScrollOffset]
+    );
+
+    useEffect(() => {
+        if (
+            !hasRestoredScroll &&
+            scrollOffset > 0 &&
+            items.length > 0 &&
+            flatListRef.current
+        ) {
+            const timer = setTimeout(() => {
+                flatListRef.current?.scrollToOffset({
+                    offset: scrollOffset,
+                    animated: false,
+                });
+                setHasRestoredScroll(true);
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [scrollOffset, items.length, hasRestoredScroll]);
+
+    useEffect(() => {
+        setHasRestoredScroll(false);
+    }, [submittedSearch]);
+
+    useEffect(() => {
+        return () => {
+            if (scrollTimeoutRef.current) {
+                clearTimeout(scrollTimeoutRef.current);
+            }
+        };
+    }, []);
+
     const handleSubmit = useCallback(() => {
         const trimmed = search.trim();
-        if (trimmed) {
+        if (trimmed && trimmed !== submittedSearch) {
+            setScrollOffset(0);
+            flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
             setSubmittedSearch(trimmed);
         }
-    }, [search]);
+    }, [search, submittedSearch, setScrollOffset, setSubmittedSearch]);
 
     const handleRefresh = useCallback(() => {
         if (submittedSearch.trim().length > 0) {
@@ -160,59 +214,68 @@ export default function HomeScreen({
     );
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                 <View style={styles.wrapper}>
                     <Text style={styles.title}>{t("home.title")}</Text>
                     <Text style={styles.subtitle}>{t("home.subtitle")}</Text>
 
                     <View style={styles.searchBar}>
-                <TextInput
-                    value={search}
-                    onChangeText={setSearch}
-                    placeholder={t("home.searchPlaceholder")}
-                    returnKeyType="search"
-                    onSubmitEditing={handleSubmit}
-                    style={styles.searchInput}
-                    autoCapitalize="none"
-                />
-                <TouchableOpacity
-                    onPress={handleSubmit}
-                    style={styles.searchButton}
-                    activeOpacity={0.8}
-                >
-                    <Text style={styles.searchButtonText}>
-                        {t("home.searchAction")}
-                    </Text>
-                </TouchableOpacity>
-            </View>
+                        <TextInput
+                            value={search}
+                            onChangeText={setSearch}
+                            placeholder={t("home.searchPlaceholder")}
+                            returnKeyType="search"
+                            onSubmitEditing={handleSubmit}
+                            style={styles.searchInput}
+                            autoCapitalize="none"
+                        />
+                        <TouchableOpacity
+                            onPress={handleSubmit}
+                            style={styles.searchButton}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={styles.searchButtonText}>
+                                {t("home.searchAction")}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
 
-            <FlatList
-                testID="media-list"
-                data={items}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={listContentStyle}
-                keyboardShouldPersistTaps="handled"
-                refreshControl={
-                    <RefreshControl
-                        enabled={!showSearchPrompt}
-                        refreshing={isRefreshing}
-                        onRefresh={handleRefresh}
+                    <FlatList
+                        ref={flatListRef}
+                        testID="media-list"
+                        data={items}
+                        keyExtractor={(item) => item.id}
+                        contentContainerStyle={listContentStyle}
+                        contentInsetAdjustmentBehavior="never"
+                        keyboardShouldPersistTaps="handled"
+                        refreshControl={
+                            <RefreshControl
+                                enabled={!showSearchPrompt}
+                                refreshing={isRefreshing}
+                                onRefresh={handleRefresh}
+                            />
+                        }
+                        ItemSeparatorComponent={() => (
+                            <View style={styles.separator} />
+                        )}
+                        renderItem={({ item }) => <MediaCard item={item} />}
+                        ListEmptyComponent={listEmptyComponent}
+                        ListFooterComponent={
+                            isFetchingNextPage && !isError ? (
+                                <View
+                                    style={styles.footer}
+                                    testID="media-list-footer"
+                                >
+                                    <ActivityIndicator />
+                                </View>
+                            ) : null
+                        }
+                        onEndReached={handleEndReached}
+                        onEndReachedThreshold={0.5}
+                        onScroll={handleScroll}
+                        scrollEventThrottle={16}
                     />
-                }
-                ItemSeparatorComponent={() => <View style={styles.separator} />}
-                renderItem={({ item }) => <MediaCard item={item} />}
-                ListEmptyComponent={listEmptyComponent}
-                ListFooterComponent={
-                    isFetchingNextPage && !isError ? (
-                        <View style={styles.footer} testID="media-list-footer">
-                            <ActivityIndicator />
-                        </View>
-                    ) : null
-                }
-                onEndReached={handleEndReached}
-                onEndReachedThreshold={0.5}
-            />
                 </View>
             </TouchableWithoutFeedback>
         </SafeAreaView>
@@ -222,6 +285,8 @@ export default function HomeScreen({
 function MediaCard({ item }: { item: MediaItem }) {
     const { t } = useTranslation();
     const router = useRouter();
+    const colors = useTheme();
+    const styles = createStyles(colors);
     const fallbackLabel = t("common.notAvailable");
     const releaseLabel = formatDate(item.releaseDate, fallbackLabel);
     const updatedLabel = formatDate(item.updatedAt, fallbackLabel);
@@ -280,146 +345,144 @@ function formatDate(
     return date.toLocaleDateString();
 }
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: colors.background,
-    },
-    wrapper: {
-        flex: 1,
-        paddingHorizontal: scale(24),
-        paddingVertical: verticalScale(24),
-    },
-    title: {
-        fontSize: fontSizes.xl,
-        fontWeight: fontWeights.semiBold,
-        textAlign: "center",
-        color: colors.textPrimary,
-    },
-    subtitle: {
-        textAlign: "center",
-        marginTop: verticalScale(8),
-        marginBottom: verticalScale(16),
-        color: colors.textSecondary,
-        fontSize: fontSizes.md,
-    },
-    centerContent: {
-        flex: 1,
-        alignItems: "center",
-        justifyContent: "center",
-        gap: verticalScale(8),
-    },
-    statusText: {
-        color: colors.textSecondary,
-        textAlign: "center",
-        fontSize: fontSizes.sm,
-    },
-    errorText: {
-        fontSize: fontSizes.lg,
-        fontWeight: fontWeights.semiBold,
-        color: colors.error,
-        textAlign: "center",
-    },
-    errorDetails: {
-        textAlign: "center",
-        color: colors.errorMuted,
-        fontSize: fontSizes.sm,
-    },
-    hint: {
-        marginTop: verticalScale(8),
-        color: colors.textSecondary,
-        fontSize: fontSizes.sm,
-    },
-    searchBar: {
-        flexDirection: "row",
-        gap: scale(12),
-        alignItems: "center",
-        marginBottom: verticalScale(16),
-    },
-    searchInput: {
-        flex: 1,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: moderateScale(10),
-        paddingHorizontal: scale(12),
-        paddingVertical: verticalScale(10),
-        fontSize: fontSizes.md,
-        backgroundColor: colors.surface,
-        color: colors.textPrimary,
-    },
-    searchButton: {
-        backgroundColor: colors.accent,
-        paddingHorizontal: scale(16),
-        paddingVertical: verticalScale(10),
-        borderRadius: moderateScale(10),
-    },
-    searchButtonText: {
-        color: colors.accentOnAccent,
-        fontWeight: fontWeights.semiBold,
-        fontSize: fontSizes.sm,
-    },
-    listContent: {
-        paddingBottom: verticalScale(24),
-    },
-    listContentCentered: {
-        flexGrow: 1,
-        justifyContent: "center",
-    },
-    separator: {
-        height: verticalScale(16),
-    },
-    card: {
-        backgroundColor: colors.surface,
-        borderRadius: moderateScale(12),
-        padding: scale(16),
-        shadowColor: "#000",
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        shadowOffset: { width: 0, height: 2 },
-        elevation: 1,
-    },
-    cardHeader: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginBottom: 8,
-    },
-    cardTitle: {
-        fontSize: fontSizes.lg,
-        fontWeight: fontWeights.semiBold,
-        flex: 1,
-        marginRight: scale(12),
-        color: colors.textPrimary,
-    },
-    badge: {
-        paddingVertical: verticalScale(4),
-        paddingHorizontal: scale(8),
-        borderRadius: moderateScale(999),
-        backgroundColor: colors.accent,
-        color: colors.accentOnAccent,
-        fontSize: fontSizes.xs,
-        fontWeight: fontWeights.semiBold,
-    },
-    cardDescription: {
-        color: colors.textPrimary,
-        marginBottom: verticalScale(8),
-        fontSize: fontSizes.md,
-    },
-    cardDescriptionMuted: {
-        color: colors.textMuted,
-        fontStyle: "italic",
-        marginBottom: verticalScale(8),
-        fontSize: fontSizes.md,
-    },
-    cardMeta: {
-        fontSize: fontSizes.xs,
-        color: colors.textMuted,
-    },
-    footer: {
-        paddingVertical: verticalScale(16),
-        alignItems: "center",
-        justifyContent: "center",
-    },
-});
-
-
+const createStyles = (colors: ReturnType<typeof useTheme>) =>
+    StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: colors.background,
+        },
+        wrapper: {
+            flex: 1,
+            paddingHorizontal: scale(12),
+        },
+        title: {
+            fontSize: fontSizes.xl,
+            fontWeight: fontWeights.semiBold,
+            textAlign: "center",
+            color: colors.textPrimary,
+        },
+        subtitle: {
+            textAlign: "center",
+            marginTop: verticalScale(8),
+            marginBottom: verticalScale(16),
+            color: colors.textSecondary,
+            fontSize: fontSizes.md,
+        },
+        centerContent: {
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            gap: verticalScale(8),
+        },
+        statusText: {
+            color: colors.textSecondary,
+            textAlign: "center",
+            fontSize: fontSizes.sm,
+        },
+        errorText: {
+            fontSize: fontSizes.lg,
+            fontWeight: fontWeights.semiBold,
+            color: colors.error,
+            textAlign: "center",
+        },
+        errorDetails: {
+            textAlign: "center",
+            color: colors.errorMuted,
+            fontSize: fontSizes.sm,
+        },
+        hint: {
+            marginTop: verticalScale(8),
+            color: colors.textSecondary,
+            fontSize: fontSizes.sm,
+        },
+        searchBar: {
+            flexDirection: "row",
+            gap: scale(12),
+            alignItems: "center",
+            marginBottom: verticalScale(16),
+        },
+        searchInput: {
+            flex: 1,
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: moderateScale(10),
+            paddingHorizontal: scale(12),
+            paddingVertical: verticalScale(10),
+            fontSize: fontSizes.md,
+            backgroundColor: colors.surface,
+            color: colors.textPrimary,
+        },
+        searchButton: {
+            backgroundColor: colors.accent,
+            paddingHorizontal: scale(16),
+            paddingVertical: verticalScale(10),
+            borderRadius: moderateScale(10),
+        },
+        searchButtonText: {
+            color: colors.accentOnAccent,
+            fontWeight: fontWeights.semiBold,
+            fontSize: fontSizes.sm,
+        },
+        listContent: {
+            paddingBottom: scale(16),
+        },
+        listContentCentered: {
+            flexGrow: 1,
+            justifyContent: "center",
+        },
+        separator: {
+            height: verticalScale(16),
+        },
+        card: {
+            backgroundColor: colors.surface,
+            borderRadius: moderateScale(12),
+            padding: scale(16),
+            shadowColor: "#000",
+            shadowOpacity: 0.05,
+            shadowRadius: 4,
+            shadowOffset: { width: 0, height: 2 },
+            elevation: 1,
+        },
+        cardHeader: {
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 8,
+        },
+        cardTitle: {
+            fontSize: fontSizes.lg,
+            fontWeight: fontWeights.semiBold,
+            flex: 1,
+            marginRight: scale(12),
+            color: colors.textPrimary,
+        },
+        badge: {
+            paddingVertical: verticalScale(4),
+            paddingHorizontal: scale(8),
+            borderRadius: moderateScale(999),
+            backgroundColor: colors.accent,
+            color: colors.accentOnAccent,
+            fontSize: fontSizes.xs,
+            fontWeight: fontWeights.semiBold,
+        },
+        cardDescription: {
+            color: colors.textPrimary,
+            marginBottom: verticalScale(8),
+            fontSize: fontSizes.md,
+        },
+        cardDescriptionMuted: {
+            color: colors.textMuted,
+            fontStyle: "italic",
+            marginBottom: verticalScale(8),
+            fontSize: fontSizes.md,
+        },
+        cardMeta: {
+            fontSize: fontSizes.xs,
+            color: colors.textMuted,
+        },
+        footer: {
+            paddingVertical: verticalScale(16),
+            alignItems: "center",
+            justifyContent: "center",
+        },
+    });

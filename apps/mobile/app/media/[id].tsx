@@ -25,7 +25,7 @@ import {
     type WatchEntry,
 } from "../../lib/watchlist";
 import { useAuthStore } from "../../lib/store/auth";
-import { colors } from "../../lib/theme/colors";
+import { useTheme } from "../../lib/theme";
 import { fontSizes, fontWeights } from "../../lib/theme/fonts";
 import "../../lib/i18n";
 
@@ -60,6 +60,8 @@ export default function MediaDetailsScreen() {
     const params = useLocalSearchParams<{ id?: string | string[] }>();
     const { t } = useTranslation();
     const queryClient = useQueryClient();
+    const colors = useTheme();
+    const styles = createStyles(colors);
     const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
     const [showRatingModal, setShowRatingModal] = useState(false);
@@ -516,11 +518,12 @@ export default function MediaDetailsScreen() {
     );
 }
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: colors.background,
-    },
+const createStyles = (colors: ReturnType<typeof useTheme>) =>
+    StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: colors.background,
+        },
     toolbar: {
         paddingHorizontal: scale(16),
         paddingTop: verticalScale(12),
@@ -749,9 +752,9 @@ const styles = StyleSheet.create({
         borderRadius: moderateScale(10),
         backgroundColor: colors.accent,
     },
-    retryButtonText: {
-        fontSize: fontSizes.sm,
-        fontWeight: fontWeights.semiBold,
-        color: colors.accentOnAccent,
-    },
-});
+        retryButtonText: {
+            fontSize: fontSizes.sm,
+            fontWeight: fontWeights.semiBold,
+            color: colors.accentOnAccent,
+        },
+    });
