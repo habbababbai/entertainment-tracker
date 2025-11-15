@@ -186,6 +186,7 @@ export type {
     WatchlistResponse,
     AddWatchlistRequest,
     UpdateWatchlistRequest,
+    WatchStatus,
 } from "@entertainment-tracker/contracts";
 
 function parseWatchEntry(value: unknown): WatchEntry {

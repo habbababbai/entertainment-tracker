@@ -13,11 +13,13 @@ import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import StarRatingComponent from "./StarRating";
-import { updateWatchlistEntry, type WatchEntry } from "../lib/watchlist";
+import {
+    updateWatchlistEntry,
+    type WatchEntry,
+    type WatchStatus,
+} from "../lib/watchlist";
 import { useTheme } from "../lib/theme";
 import { fontSizes, fontWeights } from "../lib/theme/fonts";
-
-type WatchStatus = "PLANNED" | "WATCHING" | "COMPLETED" | "ON_HOLD" | "DROPPED";
 
 interface EditWatchlistEntryModalProps {
     visible: boolean;
