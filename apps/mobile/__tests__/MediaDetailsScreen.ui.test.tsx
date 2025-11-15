@@ -652,7 +652,7 @@ describe("MediaDetailsScreen", () => {
                 createWatchEntry({ status: "WATCHING", rating: 8 })
             );
 
-            const { findByText } = renderDetailsScreen();
+            const { findByText, getAllByText } = renderDetailsScreen();
 
             await waitFor(() => {
                 expect(fetchWatchlistEntryMock).toHaveBeenCalled();
@@ -663,7 +663,8 @@ describe("MediaDetailsScreen", () => {
                 fireEvent.press(editButton);
             });
 
-            expect(await findByText("WATCHING")).toBeTruthy();
+            // Status appears both in badge and modal, check that at least one exists
+            expect(getAllByText("Watching").length).toBeGreaterThan(0);
             expect(await findByText("8/10")).toBeTruthy();
         });
 
@@ -684,9 +685,9 @@ describe("MediaDetailsScreen", () => {
                 fireEvent.press(editButton);
             });
 
-            fireEvent.press(await findByText("COMPLETED"));
+            fireEvent.press(await findByText("Completed"));
 
-            expect(await findByText("COMPLETED")).toBeTruthy();
+            expect(await findByText("Completed")).toBeTruthy();
         });
 
         it("saves changes when save button is pressed", async () => {
@@ -729,7 +730,7 @@ describe("MediaDetailsScreen", () => {
             });
 
             await act(async () => {
-                fireEvent.press(await findByText("WATCHING"));
+                fireEvent.press(await findByText("Watching"));
             });
 
             await act(async () => {

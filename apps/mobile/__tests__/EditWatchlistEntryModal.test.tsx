@@ -96,6 +96,11 @@ jest.mock("react-i18next", () => ({
                 "common.save": "Save",
                 "saved.edit.status": "Status",
                 "saved.edit.rating": "Rating",
+                "status.PLANNED": "Planned",
+                "status.WATCHING": "Watching",
+                "status.COMPLETED": "Completed",
+                "status.ON_HOLD": "On Hold",
+                "status.DROPPED": "Dropped",
             };
             return translations[key] || key;
         },
@@ -185,7 +190,7 @@ describe("EditWatchlistEntryModal", () => {
         const entry = createWatchEntry({ status: "WATCHING" });
         const { getByText } = renderModal(entry);
 
-        const watchingButton = getByText("WATCHING").parent;
+        const watchingButton = getByText("Watching").parent;
         expect(watchingButton).toBeTruthy();
     });
 
@@ -200,9 +205,9 @@ describe("EditWatchlistEntryModal", () => {
         const entry = createWatchEntry({ status: "PLANNED" });
         const { getByText } = renderModal(entry);
 
-        fireEvent.press(getByText("WATCHING"));
+        fireEvent.press(getByText("Watching"));
 
-        const watchingButton = getByText("WATCHING").parent;
+        const watchingButton = getByText("Watching").parent;
         expect(watchingButton).toBeTruthy();
     });
 
@@ -247,7 +252,7 @@ describe("EditWatchlistEntryModal", () => {
 
         const { getByText, getByTestId } = renderModal(entry);
 
-        fireEvent.press(getByText("WATCHING"));
+        fireEvent.press(getByText("Watching"));
         fireEvent.press(getByTestId("star-5"));
         fireEvent.press(getByText("Save"));
 
@@ -270,11 +275,11 @@ describe("EditWatchlistEntryModal", () => {
         const entry = createWatchEntry();
         const { getByText } = renderModal(entry);
 
-        expect(getByText("PLANNED")).toBeTruthy();
-        expect(getByText("WATCHING")).toBeTruthy();
-        expect(getByText("COMPLETED")).toBeTruthy();
-        expect(getByText("ON_HOLD")).toBeTruthy();
-        expect(getByText("DROPPED")).toBeTruthy();
+        expect(getByText("Planned")).toBeTruthy();
+        expect(getByText("Watching")).toBeTruthy();
+        expect(getByText("Completed")).toBeTruthy();
+        expect(getByText("On Hold")).toBeTruthy();
+        expect(getByText("Dropped")).toBeTruthy();
     });
 
     it("removes rating when same star is pressed again", () => {
@@ -323,7 +328,7 @@ describe("EditWatchlistEntryModal", () => {
         const { getByText } = renderModal(entry);
 
         expect(getByText("9/10")).toBeTruthy();
-        expect(getByText("COMPLETED")).toBeTruthy();
+        expect(getByText("Completed")).toBeTruthy();
     });
 });
 
