@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     FlatList,
@@ -18,22 +18,29 @@ import { moderateScale, scale, verticalScale } from "react-native-size-matters";
 import { useRouter } from "expo-router";
 
 import { fetchMedia, type MediaItem, type MediaList } from "../../lib/media";
+import { useHomeStore } from "../../lib/store";
 import "../../lib/i18n";
 import { colors } from "../../lib/theme/colors";
 import { fontSizes, fontWeights } from "../../lib/theme/fonts";
 
 const PAGE_SIZE = 15;
 
-type HomeScreenProps = {
-    initialQuery?: string;
-};
-
-export default function HomeScreen({
-    initialQuery = "chainsaw man",
-}: HomeScreenProps = {}) {
-    const [search, setSearch] = useState(initialQuery);
-    const [submittedSearch, setSubmittedSearch] = useState(initialQuery);
+export default function HomeScreen() {
+    const {
+        submittedSearch,
+        scrollOffset,
+        setSubmittedSearch,
+        setScrollOffset,
+    } = useHomeStore();
+    const [search, setSearch] = useState(submittedSearch);
+    const [hasRestoredScroll, setHasRestoredScroll] = useState(false);
+    const flatListRef = useRef<FlatList<MediaItem>>(null);
+    const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const { t } = useTranslation();
+
+    useEffect(() => {
+        setSearch(submittedSearch);
+    }, [submittedSearch]);
 
     const {
         data,
@@ -68,12 +75,57 @@ export default function HomeScreen({
         [data]
     );
 
+    const handleScroll = useCallback(
+        (event: { nativeEvent: { contentOffset: { y: number } } }) => {
+            const offset = event.nativeEvent.contentOffset.y;
+            if (scrollTimeoutRef.current) {
+                clearTimeout(scrollTimeoutRef.current);
+            }
+            scrollTimeoutRef.current = setTimeout(() => {
+                setScrollOffset(offset);
+            }, 300);
+        },
+        [setScrollOffset]
+    );
+
+    useEffect(() => {
+        if (
+            !hasRestoredScroll &&
+            scrollOffset > 0 &&
+            items.length > 0 &&
+            flatListRef.current
+        ) {
+            const timer = setTimeout(() => {
+                flatListRef.current?.scrollToOffset({
+                    offset: scrollOffset,
+                    animated: false,
+                });
+                setHasRestoredScroll(true);
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [scrollOffset, items.length, hasRestoredScroll]);
+
+    useEffect(() => {
+        setHasRestoredScroll(false);
+    }, [submittedSearch]);
+
+    useEffect(() => {
+        return () => {
+            if (scrollTimeoutRef.current) {
+                clearTimeout(scrollTimeoutRef.current);
+            }
+        };
+    }, []);
+
     const handleSubmit = useCallback(() => {
         const trimmed = search.trim();
-        if (trimmed) {
+        if (trimmed && trimmed !== submittedSearch) {
+            setScrollOffset(0);
+            flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
             setSubmittedSearch(trimmed);
         }
-    }, [search]);
+    }, [search, submittedSearch, setScrollOffset, setSubmittedSearch]);
 
     const handleRefresh = useCallback(() => {
         if (submittedSearch.trim().length > 0) {
@@ -167,52 +219,60 @@ export default function HomeScreen({
                     <Text style={styles.subtitle}>{t("home.subtitle")}</Text>
 
                     <View style={styles.searchBar}>
-                <TextInput
-                    value={search}
-                    onChangeText={setSearch}
-                    placeholder={t("home.searchPlaceholder")}
-                    returnKeyType="search"
-                    onSubmitEditing={handleSubmit}
-                    style={styles.searchInput}
-                    autoCapitalize="none"
-                />
-                <TouchableOpacity
-                    onPress={handleSubmit}
-                    style={styles.searchButton}
-                    activeOpacity={0.8}
-                >
-                    <Text style={styles.searchButtonText}>
-                        {t("home.searchAction")}
-                    </Text>
-                </TouchableOpacity>
-            </View>
+                        <TextInput
+                            value={search}
+                            onChangeText={setSearch}
+                            placeholder={t("home.searchPlaceholder")}
+                            returnKeyType="search"
+                            onSubmitEditing={handleSubmit}
+                            style={styles.searchInput}
+                            autoCapitalize="none"
+                        />
+                        <TouchableOpacity
+                            onPress={handleSubmit}
+                            style={styles.searchButton}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={styles.searchButtonText}>
+                                {t("home.searchAction")}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
 
-            <FlatList
-                testID="media-list"
-                data={items}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={listContentStyle}
-                keyboardShouldPersistTaps="handled"
-                refreshControl={
-                    <RefreshControl
-                        enabled={!showSearchPrompt}
-                        refreshing={isRefreshing}
-                        onRefresh={handleRefresh}
+                    <FlatList
+                        ref={flatListRef}
+                        testID="media-list"
+                        data={items}
+                        keyExtractor={(item) => item.id}
+                        contentContainerStyle={listContentStyle}
+                        keyboardShouldPersistTaps="handled"
+                        refreshControl={
+                            <RefreshControl
+                                enabled={!showSearchPrompt}
+                                refreshing={isRefreshing}
+                                onRefresh={handleRefresh}
+                            />
+                        }
+                        ItemSeparatorComponent={() => (
+                            <View style={styles.separator} />
+                        )}
+                        renderItem={({ item }) => <MediaCard item={item} />}
+                        ListEmptyComponent={listEmptyComponent}
+                        ListFooterComponent={
+                            isFetchingNextPage && !isError ? (
+                                <View
+                                    style={styles.footer}
+                                    testID="media-list-footer"
+                                >
+                                    <ActivityIndicator />
+                                </View>
+                            ) : null
+                        }
+                        onEndReached={handleEndReached}
+                        onEndReachedThreshold={0.5}
+                        onScroll={handleScroll}
+                        scrollEventThrottle={16}
                     />
-                }
-                ItemSeparatorComponent={() => <View style={styles.separator} />}
-                renderItem={({ item }) => <MediaCard item={item} />}
-                ListEmptyComponent={listEmptyComponent}
-                ListFooterComponent={
-                    isFetchingNextPage && !isError ? (
-                        <View style={styles.footer} testID="media-list-footer">
-                            <ActivityIndicator />
-                        </View>
-                    ) : null
-                }
-                onEndReached={handleEndReached}
-                onEndReachedThreshold={0.5}
-            />
                 </View>
             </TouchableWithoutFeedback>
         </SafeAreaView>
@@ -421,5 +481,3 @@ const styles = StyleSheet.create({
         justifyContent: "center",
     },
 });
-
-

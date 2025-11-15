@@ -13,6 +13,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import HomeScreen from "../app/(tabs)/home";
 import type { MediaItem, MediaList } from "../lib/media";
 import { fetchMedia } from "../lib/media";
+import { useHomeStore } from "../lib/store/home";
 
 const mockPush = jest.fn();
 
@@ -20,6 +21,17 @@ jest.mock("expo-router", () => ({
     useRouter: () => ({
         push: mockPush,
     }),
+}));
+
+jest.mock("@react-native-async-storage/async-storage", () => ({
+    getItem: jest.fn(() => Promise.resolve(null)),
+    setItem: jest.fn(() => Promise.resolve()),
+    removeItem: jest.fn(() => Promise.resolve()),
+    multiGet: jest.fn(() => Promise.resolve([])),
+    multiSet: jest.fn(() => Promise.resolve()),
+    clear: jest.fn(() => Promise.resolve()),
+    getAllKeys: jest.fn(() => Promise.resolve([])),
+    multiRemove: jest.fn(() => Promise.resolve()),
 }));
 
 jest.mock("../lib/media", () => {
@@ -58,7 +70,7 @@ function createQueryClient() {
     });
 }
 
-function renderHomeScreen(options?: Parameters<typeof HomeScreen>[0]) {
+function renderHomeScreen() {
     const queryClient = createQueryClient();
     activeClients.add(queryClient);
     const utils = render(
@@ -69,7 +81,7 @@ function renderHomeScreen(options?: Parameters<typeof HomeScreen>[0]) {
             }}
         >
             <QueryClientProvider client={queryClient}>
-                <HomeScreen {...options} />
+                <HomeScreen />
             </QueryClientProvider>
         </SafeAreaProvider>
     );
@@ -111,6 +123,10 @@ function createMediaItem(overrides: Partial<MediaItem> = {}): MediaItem {
 beforeEach(() => {
     fetchMediaMock.mockReset();
     mockPush.mockReset();
+    act(() => {
+        useHomeStore.getState().setSubmittedSearch("chainsaw man");
+        useHomeStore.getState().setScrollOffset(0);
+    });
 });
 
 afterEach(async () => {
@@ -130,7 +146,11 @@ afterEach(async () => {
 
 describe("HomeScreen UI", () => {
     it("shows a prompt when no search has been submitted", async () => {
-        const { findByText } = renderHomeScreen({ initialQuery: "" });
+        act(() => {
+            useHomeStore.getState().setSubmittedSearch("");
+        });
+
+        const { findByText } = renderHomeScreen();
 
         expect(
             await findByText("Start typing to search OMDb titles.")
@@ -187,23 +207,23 @@ describe("HomeScreen UI", () => {
     it("shows an error message when the query fails", async () => {
         fetchMediaMock.mockRejectedValueOnce(new Error("Network unavailable"));
 
-    const { findByText, getByTestId } = renderHomeScreen();
+        const { findByText, getByTestId } = renderHomeScreen();
 
         expect(await findByText("Unable to load media.")).toBeTruthy();
         expect(await findByText("Network unavailable")).toBeTruthy();
-    expect(getByTestId("media-error-details").props.children).toBe(
-        "Network unavailable"
-    );
+        expect(getByTestId("media-error-details").props.children).toBe(
+            "Network unavailable"
+        );
     });
 
-it("omits error details when the query fails without a message", async () => {
-    fetchMediaMock.mockRejectedValueOnce(new Error(""));
+    it("omits error details when the query fails without a message", async () => {
+        fetchMediaMock.mockRejectedValueOnce(new Error(""));
 
-    const { findByText, queryByTestId } = renderHomeScreen();
+        const { findByText, queryByTestId } = renderHomeScreen();
 
-    expect(await findByText("Unable to load media.")).toBeTruthy();
-    expect(queryByTestId("media-error-details")).toBeNull();
-});
+        expect(await findByText("Unable to load media.")).toBeTruthy();
+        expect(queryByTestId("media-error-details")).toBeNull();
+    });
 
     it("submits a trimmed search term when the button is pressed", async () => {
         fetchMediaMock
@@ -252,7 +272,7 @@ it("omits error details when the query fails without a message", async () => {
                     createMediaItem({ id: "media-401", title: "Mob Psycho" }),
                 ]),
                 hasMore: true,
-            nextPage: "2" as unknown as number,
+                nextPage: "2" as unknown as number,
             })
             .mockResolvedValueOnce(
                 createMediaList([
@@ -277,47 +297,50 @@ it("omits error details when the query fails without a message", async () => {
         expect(secondCall?.[0]?.page).toBe(2);
     });
 
-it("shows a footer spinner while fetching the next page", async () => {
-    let resolveSecond: (value: MediaList) => void;
-    const secondPromise = new Promise<MediaList>((resolve) => {
-        resolveSecond = resolve;
+    it("shows a footer spinner while fetching the next page", async () => {
+        let resolveSecond: (value: MediaList) => void;
+        const secondPromise = new Promise<MediaList>((resolve) => {
+            resolveSecond = resolve;
+        });
+
+        fetchMediaMock
+            .mockResolvedValueOnce({
+                ...createMediaList([
+                    createMediaItem({ id: "media-701", title: "Mob Psycho" }),
+                ]),
+                hasMore: true,
+                nextPage: 2,
+            })
+            .mockImplementationOnce(() => secondPromise);
+
+        const { getByTestId, findByText, queryByTestId } = renderHomeScreen();
+
+        await findByText("Mob Psycho");
+
+        const list = getByTestId("media-list");
+        await act(async () => {
+            fireEvent(list, "onEndReached");
+        });
+
+        await waitFor(() =>
+            expect(getByTestId("media-list-footer")).toBeTruthy()
+        );
+
+        act(() =>
+            resolveSecond!(
+                createMediaList([
+                    createMediaItem({
+                        id: "media-702",
+                        title: "Mob Psycho Finale",
+                    }),
+                ])
+            )
+        );
+
+        await waitFor(() =>
+            expect(queryByTestId("media-list-footer")).toBeNull()
+        );
     });
-
-    fetchMediaMock
-        .mockResolvedValueOnce({
-            ...createMediaList([
-                createMediaItem({ id: "media-701", title: "Mob Psycho" }),
-            ]),
-            hasMore: true,
-            nextPage: 2,
-        })
-        .mockImplementationOnce(() => secondPromise);
-
-    const { getByTestId, findByText, queryByTestId } = renderHomeScreen();
-
-    await findByText("Mob Psycho");
-
-    const list = getByTestId("media-list");
-    await act(async () => {
-        fireEvent(list, "onEndReached");
-    });
-
-    await waitFor(() =>
-        expect(getByTestId("media-list-footer")).toBeTruthy()
-    );
-
-    act(() =>
-        resolveSecond!(
-            createMediaList([
-                createMediaItem({ id: "media-702", title: "Mob Psycho Finale" }),
-            ])
-        )
-    );
-
-    await waitFor(() =>
-        expect(queryByTestId("media-list-footer")).toBeNull()
-    );
-});
 
     it("refetches results when the list is pulled to refresh", async () => {
         fetchMediaMock
@@ -374,7 +397,11 @@ it("shows a footer spinner while fetching the next page", async () => {
 });
 
 it("disables pull-to-refresh when no search has been submitted", async () => {
-    const { getByTestId } = renderHomeScreen({ initialQuery: "" });
+    act(() => {
+        useHomeStore.getState().setSubmittedSearch("");
+    });
+
+    const { getByTestId } = renderHomeScreen();
 
     const list = getByTestId("media-list");
     expect(list.props.refreshControl.props.enabled).toBe(false);
@@ -407,4 +434,89 @@ it("falls back to the first page when the next page value is not numeric", async
     await waitFor(() => expect(fetchMediaMock).toHaveBeenCalledTimes(2));
     const [, secondCall] = fetchMediaMock.mock.calls;
     expect(secondCall?.[0]?.page).toBe(1);
+});
+
+it("restores previous search term when screen mounts", async () => {
+    act(() => {
+        useHomeStore.getState().setSubmittedSearch("persisted search");
+    });
+
+    fetchMediaMock.mockResolvedValueOnce(
+        createMediaList([
+            createMediaItem({
+                id: "media-persist",
+                title: "Persisted Result",
+            }),
+        ])
+    );
+
+    const { findByText } = renderHomeScreen();
+
+    await waitFor(() => {
+        expect(fetchMediaMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                query: "persisted search",
+            })
+        );
+    });
+
+    await findByText("Persisted Result");
+});
+
+it("restores scroll position when screen mounts with persisted offset", async () => {
+    fetchMediaMock.mockResolvedValueOnce(
+        createMediaList([
+            createMediaItem({ id: "media-1", title: "Item 1" }),
+            createMediaItem({ id: "media-2", title: "Item 2" }),
+            createMediaItem({ id: "media-3", title: "Item 3" }),
+        ])
+    );
+
+    act(() => {
+        useHomeStore.getState().setScrollOffset(100);
+    });
+
+    const { getByTestId } = renderHomeScreen();
+
+    await waitFor(() => expect(fetchMediaMock).toHaveBeenCalled());
+
+    const list = getByTestId("media-list");
+    expect(list).toBeTruthy();
+});
+
+it("persists search term when submitting a new search", async () => {
+    fetchMediaMock
+        .mockResolvedValueOnce(
+            createMediaList([
+                createMediaItem({ id: "media-1", title: "First Search" }),
+            ])
+        )
+        .mockResolvedValueOnce(
+            createMediaList([
+                createMediaItem({ id: "media-2", title: "Second Search" }),
+            ])
+        );
+
+    const { getByPlaceholderText, getByText, findByText } = renderHomeScreen();
+
+    await findByText("First Search");
+
+    const input = getByPlaceholderText("Search OMDb (e.g. Spirited Away)");
+    fireEvent.changeText(input, "new search term");
+
+    await act(async () => {
+        fireEvent.press(getByText("Search"));
+    });
+
+    await waitFor(() => {
+        expect(useHomeStore.getState().submittedSearch).toBe("new search term");
+    });
+
+    await waitFor(() => {
+        expect(fetchMediaMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                query: "new search term",
+            })
+        );
+    });
 });
