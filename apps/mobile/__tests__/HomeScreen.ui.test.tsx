@@ -225,7 +225,7 @@ describe("HomeScreen UI", () => {
         expect(queryByTestId("media-error-details")).toBeNull();
     });
 
-    it("submits a trimmed search term when the button is pressed", async () => {
+    it("submits a trimmed search term when Enter is pressed", async () => {
         fetchMediaMock
             .mockResolvedValueOnce(
                 createMediaList([
@@ -238,13 +238,13 @@ describe("HomeScreen UI", () => {
                 ])
             );
 
-        const { getByPlaceholderText, getByText } = renderHomeScreen();
+        const { getByPlaceholderText } = renderHomeScreen();
 
         await waitFor(() => expect(fetchMediaMock).toHaveBeenCalledTimes(1));
 
         const input = getByPlaceholderText("Search OMDb (e.g. Spirited Away)");
         fireEvent.changeText(input, "  Naruto  ");
-        fireEvent.press(getByText("Search"));
+        fireEvent(input, "onSubmitEditing");
 
         await waitFor(() =>
             expect(fetchMediaMock).toHaveBeenLastCalledWith(
@@ -379,17 +379,17 @@ describe("HomeScreen UI", () => {
             ])
         );
 
-        const { getByPlaceholderText, getByText, findByText } =
-            renderHomeScreen();
+        const { getByPlaceholderText, findByText } = renderHomeScreen();
 
         await findByText("Initial Result");
 
         fetchMediaMock.mockClear();
 
         const input = getByPlaceholderText("Search OMDb (e.g. Spirited Away)");
-        await act(async () => {
-            fireEvent.changeText(input, "   ");
-            fireEvent.press(getByText("Search"));
+        fireEvent.changeText(input, "   ");
+
+        act(() => {
+            jest.advanceTimersByTime(300);
         });
 
         await waitFor(() => expect(fetchMediaMock).not.toHaveBeenCalled());
@@ -497,15 +497,15 @@ it("persists search term when submitting a new search", async () => {
             ])
         );
 
-    const { getByPlaceholderText, getByText, findByText } = renderHomeScreen();
+    const { getByPlaceholderText, findByText } = renderHomeScreen();
 
     await findByText("First Search");
 
     const input = getByPlaceholderText("Search OMDb (e.g. Spirited Away)");
     fireEvent.changeText(input, "new search term");
 
-    await act(async () => {
-        fireEvent.press(getByText("Search"));
+    act(() => {
+        jest.advanceTimersByTime(300);
     });
 
     await waitFor(() => {

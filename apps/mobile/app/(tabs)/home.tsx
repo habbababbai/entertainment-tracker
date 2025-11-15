@@ -6,7 +6,6 @@ import {
     RefreshControl,
     StyleSheet,
     Text,
-    TextInput,
     TouchableOpacity,
     TouchableWithoutFeedback,
     View,
@@ -19,6 +18,7 @@ import { useRouter } from "expo-router";
 
 import { fetchMedia, type MediaItem, type MediaList } from "../../lib/media";
 import { useHomeStore } from "../../lib/store";
+import SearchBar from "../../components/SearchBar";
 import "../../lib/i18n";
 import { useTheme } from "../../lib/theme";
 import { fontSizes, fontWeights } from "../../lib/theme/fonts";
@@ -41,8 +41,23 @@ export default function HomeScreen() {
     const styles = createStyles(colors);
 
     useEffect(() => {
-        setSearch(submittedSearch);
-    }, [submittedSearch]);
+        const trimmedSearch = search.trim();
+        const trimmedSubmitted = submittedSearch.trim();
+        
+        if (trimmedSearch === trimmedSubmitted) {
+            return;
+        }
+
+        if (trimmedSearch && trimmedSearch !== trimmedSubmitted) {
+            setScrollOffset(0);
+            flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+            setSubmittedSearch(trimmedSearch);
+        } else if (!trimmedSearch && trimmedSubmitted) {
+            setScrollOffset(0);
+            flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+            setSubmittedSearch("");
+        }
+    }, [search, setScrollOffset, setSubmittedSearch]);
 
     const {
         data,
@@ -220,26 +235,12 @@ export default function HomeScreen() {
                     <Text style={styles.title}>{t("home.title")}</Text>
                     <Text style={styles.subtitle}>{t("home.subtitle")}</Text>
 
-                    <View style={styles.searchBar}>
-                        <TextInput
-                            value={search}
-                            onChangeText={setSearch}
-                            placeholder={t("home.searchPlaceholder")}
-                            returnKeyType="search"
-                            onSubmitEditing={handleSubmit}
-                            style={styles.searchInput}
-                            autoCapitalize="none"
-                        />
-                        <TouchableOpacity
-                            onPress={handleSubmit}
-                            style={styles.searchButton}
-                            activeOpacity={0.8}
-                        >
-                            <Text style={styles.searchButtonText}>
-                                {t("home.searchAction")}
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
+                    <SearchBar
+                        value={search}
+                        onChangeText={setSearch}
+                        onSubmit={handleSubmit}
+                        placeholder={t("home.searchPlaceholder")}
+                    />
 
                     <FlatList
                         ref={flatListRef}
@@ -393,34 +394,6 @@ const createStyles = (colors: ReturnType<typeof useTheme>) =>
         hint: {
             marginTop: verticalScale(8),
             color: colors.textSecondary,
-            fontSize: fontSizes.sm,
-        },
-        searchBar: {
-            flexDirection: "row",
-            gap: scale(12),
-            alignItems: "center",
-            marginBottom: verticalScale(16),
-        },
-        searchInput: {
-            flex: 1,
-            borderWidth: 1,
-            borderColor: colors.border,
-            borderRadius: moderateScale(10),
-            paddingHorizontal: scale(12),
-            paddingVertical: verticalScale(10),
-            fontSize: fontSizes.md,
-            backgroundColor: colors.surface,
-            color: colors.textPrimary,
-        },
-        searchButton: {
-            backgroundColor: colors.accent,
-            paddingHorizontal: scale(16),
-            paddingVertical: verticalScale(10),
-            borderRadius: moderateScale(10),
-        },
-        searchButtonText: {
-            color: colors.accentOnAccent,
-            fontWeight: fontWeights.semiBold,
             fontSize: fontSizes.sm,
         },
         listContent: {
