@@ -114,8 +114,9 @@ function SavedScreen() {
             styles.listContent,
             (isError || showEmptyState || isLoading) &&
                 styles.listContentCentered,
+            items.length > 0 && styles.listContentTop,
         ],
-        [isError, isLoading, showEmptyState]
+        [isError, isLoading, showEmptyState, items.length]
     );
 
     return (
@@ -266,6 +267,9 @@ const createStyles = (colors: ReturnType<typeof useTheme>) =>
     },
     listContent: {
         paddingBottom: verticalScale(24),
+    },
+    listContentTop: {
+        flexGrow: 0,
     },
     listContentCentered: {
         flexGrow: 1,
