@@ -10,7 +10,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import ResetPasswordScreen from "../app/reset-password";
 import { loginUser, resetPasswordForLoggedInUser } from "../lib/auth";
-import { useAuthStore } from "../lib/store/auth";
+import { useAuthStore, type AuthState } from "../lib/store/auth";
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
@@ -89,17 +89,24 @@ beforeEach(() => {
     mockBack.mockReset();
     mockCanGoBack.mockReturnValue(true);
     useAuthStoreMock.mockImplementation(
-        (
-            selector: (state: {
-                user: unknown;
-                setAuthFromResponse: unknown;
-            }) => unknown
-        ) => {
-        const mockState = {
+        (selector?: (state: AuthState) => unknown) => {
+        const mockState: AuthState = {
             user: mockUser,
+            accessToken: null,
+            refreshToken: null,
+            isAuthenticated: true,
+            _refreshPromise: null,
+            setAuth: jest.fn(),
             setAuthFromResponse: mockSetAuthFromResponse,
+            clearAuth: jest.fn(),
+            updateUser: jest.fn(),
+            loadTokens: jest.fn(),
+            refreshAccessToken: jest.fn(),
         };
-        return selector(mockState);
+        if (typeof selector === "function") {
+            return selector(mockState);
+        }
+        return mockState;
     });
 });
 

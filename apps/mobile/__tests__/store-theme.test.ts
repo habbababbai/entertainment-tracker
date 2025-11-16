@@ -25,7 +25,7 @@ const mockSetItem = AsyncStorage.setItem as jest.MockedFunction<
 >;
 
 // Mock Appearance.getColorScheme
-const mockGetColorScheme = jest.fn(() => "light" as const);
+const mockGetColorScheme = jest.fn(() => "light" as "light" | "dark" | null);
 jest.spyOn(
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     require("react-native").Appearance,
@@ -40,7 +40,7 @@ describe("useThemeStore", () => {
         jest.clearAllMocks();
         mockGetItem.mockResolvedValue(null);
         mockSetItem.mockResolvedValue(undefined);
-        mockGetColorScheme.mockReturnValue("light");
+        mockGetColorScheme.mockReturnValue("light" as "light" | "dark" | null);
 
         await act(async () => {
             useThemeStore.setState({

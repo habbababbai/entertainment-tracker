@@ -11,7 +11,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import SettingsTab from "../app/(tabs)/settings";
 import { useAuthStore } from "../lib/store/auth";
-import { useThemeStore } from "../lib/store/theme";
+import { useThemeStore, type ThemeState } from "../lib/store/theme";
 
 jest.mock("@react-native-async-storage/async-storage", () => ({
     getItem: jest.fn(),
@@ -101,8 +101,8 @@ beforeEach(() => {
     mockGetSystemTheme.mockReturnValue("light");
 
     useThemeStoreMock.mockImplementation(
-        (selector?: (state: ReturnType<typeof useThemeStoreMock>) => unknown) => {
-        const state = {
+        (selector?: (state: ThemeState) => unknown) => {
+        const state: ThemeState = {
             themeMode: currentThemeMode,
             setThemeMode: mockSetThemeMode,
             toggleTheme: mockToggleTheme,
@@ -644,12 +644,13 @@ describe("SettingsTab UI", () => {
 
     it("calls router.push when reset password button is pressed", async () => {
         const mockPush = jest.fn();
+        const { useRouter } = require("expo-router");
         jest.spyOn(require("expo-router"), "useRouter").mockReturnValue({
             push: mockPush,
             replace: jest.fn(),
             back: jest.fn(),
             canGoBack: jest.fn(() => true),
-        } as Parameters<typeof mockUseRouter>[0]);
+        } as ReturnType<typeof useRouter>);
 
         useAuthStoreMock.mockImplementation((selector) => {
             if (typeof selector === "function") {
