@@ -200,7 +200,7 @@ describe("HomeScreen UI", () => {
 
         expect(mockPush).toHaveBeenCalledWith({
             pathname: "/media/[id]",
-            params: { id: "media-701" },
+            params: { id: "media-701", from: "home" },
         });
     });
 

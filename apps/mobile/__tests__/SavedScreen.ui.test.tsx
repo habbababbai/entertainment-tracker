@@ -13,7 +13,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import SavedTab from "../app/(tabs)/saved";
 import type { WatchEntry, WatchlistResponse } from "../lib/watchlist";
 import { fetchWatchlist } from "../lib/watchlist";
-import { useAuthStore } from "../lib/store/auth";
+import { useAuthStore, type AuthState } from "../lib/store/auth";
 
 const mockPush = jest.fn();
 
@@ -143,9 +143,9 @@ beforeEach(() => {
     fetchWatchlistMock.mockReset();
     mockPush.mockReset();
     useAuthStoreMock.mockImplementation(
-        (selector?: (state: { isAuthenticated: boolean }) => unknown) => {
+        (selector?: (state: AuthState) => unknown) => {
             if (typeof selector === "function") {
-                return selector({ isAuthenticated: true });
+                return selector({ isAuthenticated: true } as AuthState);
             }
             return true;
         }
@@ -170,9 +170,9 @@ afterEach(async () => {
 describe("SavedScreen UI", () => {
     it("shows login screen when user is not authenticated", () => {
         useAuthStoreMock.mockImplementation(
-            (selector?: (state: { isAuthenticated: boolean }) => unknown) => {
+            (selector?: (state: AuthState) => unknown) => {
                 if (typeof selector === "function") {
-                    return selector({ isAuthenticated: false });
+                    return selector({ isAuthenticated: false } as AuthState);
                 }
                 return false;
             }
@@ -352,7 +352,7 @@ describe("SavedScreen UI", () => {
 
         expect(mockPush).toHaveBeenCalledWith({
             pathname: "/media/[id]",
-            params: { id: "tt0000001" },
+            params: { id: "tt0000001", from: "saved" },
         });
     });
 

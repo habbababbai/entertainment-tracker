@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import React from "react";
 import {
     act,
@@ -32,13 +34,12 @@ jest.mock("../lib/i18n", () => ({
 
 jest.mock("react-i18next", () => ({
     useTranslation: () => {
-        const actual = jest.requireActual("react-i18next");
         const { en } = jest.requireActual("../lib/i18n/locales/en");
-        
+
         // Helper function to get nested translation value
         const getTranslation = (key: string): string => {
             const parts = key.split(".");
-            let value: any = en;
+            let value: unknown = en;
             for (const part of parts) {
                 if (value && typeof value === "object" && part in value) {
                     value = value[part as keyof typeof value];
@@ -48,7 +49,7 @@ jest.mock("react-i18next", () => ({
             }
             return typeof value === "string" ? value : key;
         };
-        
+
         return {
             t: (key: string, params?: Record<string, string | number>) => {
                 let translation = getTranslation(key);
@@ -79,7 +80,7 @@ import {
     removeFromWatchlist,
     updateWatchlistEntry,
 } from "../lib/watchlist";
-import { useAuthStore } from "../lib/store/auth";
+import { useAuthStore, type AuthState } from "../lib/store/auth";
 
 jest.mock("../lib/media", () => {
     const actual = jest.requireActual("../lib/media");
@@ -161,6 +162,8 @@ const useAuthStoreMock = useAuthStore as jest.MockedFunction<
 >;
 
 const mockBack = jest.fn();
+const mockReplace = jest.fn();
+const mockCanGoBack = jest.fn(() => true);
 
 jest.mock("expo-router", () => {
     const actual = jest.requireActual("expo-router");
@@ -171,6 +174,8 @@ jest.mock("expo-router", () => {
         },
         useRouter: () => ({
             back: mockBack,
+            replace: mockReplace,
+            canGoBack: mockCanGoBack,
         }),
         useLocalSearchParams: jest.fn(() => ({
             id: "tt1234567",
@@ -287,7 +292,7 @@ afterEach(async () => {
             })
         );
     });
-    
+
     // Clear all caches within act to catch any final updates
     await act(async () => {
         activeClients.forEach((client) => {
@@ -297,9 +302,9 @@ afterEach(async () => {
         });
         activeClients.clear();
     });
-    
+
     cleanup();
-    
+
     fetchMediaItemMock.mockReset();
     fetchWatchlistEntryMock.mockReset();
     addToWatchlistMock.mockReset();
@@ -310,12 +315,13 @@ afterEach(async () => {
     mockUseLocalSearchParams.mockReturnValue({ id: "tt1234567" });
     useAuthStoreMock.mockReset();
     useAuthStoreMock.mockImplementation(
-        (selector?: (state: { isAuthenticated: boolean }) => unknown) => {
-        if (typeof selector === "function") {
-            return selector({ isAuthenticated: false });
+        (selector?: (state: AuthState) => unknown) => {
+            if (typeof selector === "function") {
+                return selector({ isAuthenticated: false } as AuthState);
+            }
+            return false;
         }
-        return false;
-    });
+    );
 });
 
 describe("MediaDetailsScreen", () => {
@@ -355,6 +361,49 @@ describe("MediaDetailsScreen", () => {
         const backButton = await findByText("Back");
         fireEvent.press(backButton);
         expect(mockBack).toHaveBeenCalled();
+    });
+
+    it("replaces to the originating saved tab when cannot go back", async () => {
+        mockCanGoBack.mockReturnValue(false);
+        useAuthStoreMock.mockImplementation(
+            (selector?: (state: AuthState) => unknown) => {
+                if (typeof selector === "function") {
+                    return selector({ isAuthenticated: true } as AuthState);
+                }
+                return true;
+            }
+        );
+        fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
+        // Provide origin param via route
+        mockUseLocalSearchParams.mockImplementation(() => ({
+            id: "tt1234567",
+            from: "saved",
+        }));
+
+        const { findByText } = renderDetailsScreen();
+        const backButton = await findByText("Back");
+        fireEvent.press(backButton);
+        expect(mockReplace).toHaveBeenCalledWith("/(tabs)/saved");
+    });
+
+    it("shows the rating section when a rating exists", async () => {
+        useAuthStoreMock.mockImplementation(
+            (selector?: (state: AuthState) => unknown) => {
+                if (typeof selector === "function") {
+                    return selector({ isAuthenticated: true } as AuthState);
+                }
+                return true;
+            }
+        );
+        fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
+        fetchWatchlistEntryMock.mockResolvedValueOnce(
+            createWatchEntry({ rating: 7 })
+        );
+
+        const { findByText } = renderDetailsScreen();
+        expect(await findByText("Your rating")).toBeTruthy();
+        expect(await findByText("7/10")).toBeTruthy();
+        expect(await findByText("Overview")).toBeTruthy();
     });
 
     it("shows a poster fallback when no image is available", async () => {
@@ -456,22 +505,26 @@ describe("MediaDetailsScreen", () => {
     describe("watchlist functionality", () => {
         beforeEach(() => {
             useAuthStoreMock.mockImplementation(
-        (selector?: (state: { isAuthenticated: boolean }) => unknown) => {
-                if (typeof selector === "function") {
-                    return selector({ isAuthenticated: true });
+                (selector?: (state: AuthState) => unknown) => {
+                    if (typeof selector === "function") {
+                        return selector({ isAuthenticated: true } as AuthState);
+                    }
+                    return true;
                 }
-                return true;
-            });
+            );
         });
 
         it("does not show watchlist actions when user is not authenticated", async () => {
             useAuthStoreMock.mockImplementation(
-        (selector?: (state: { isAuthenticated: boolean }) => unknown) => {
-                if (typeof selector === "function") {
-                    return selector({ isAuthenticated: false });
+                (selector?: (state: AuthState) => unknown) => {
+                    if (typeof selector === "function") {
+                        return selector({
+                            isAuthenticated: false,
+                        } as AuthState);
+                    }
+                    return false;
                 }
-                return false;
-            });
+            );
 
             fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
 
@@ -552,7 +605,9 @@ describe("MediaDetailsScreen", () => {
                 });
             });
 
-            expect(queryClient.getQueryCache().findAll().length).toBeGreaterThanOrEqual(1);
+            expect(
+                queryClient.getQueryCache().findAll().length
+            ).toBeGreaterThanOrEqual(1);
         });
 
         it("removes item from watchlist when remove button is pressed", async () => {
@@ -572,10 +627,14 @@ describe("MediaDetailsScreen", () => {
             });
 
             await waitFor(() => {
-                expect(removeFromWatchlistMock).toHaveBeenCalledWith("tt1234567");
+                expect(removeFromWatchlistMock).toHaveBeenCalledWith(
+                    "tt1234567"
+                );
             });
 
-            expect(queryClient.getQueryCache().findAll().length).toBeGreaterThanOrEqual(1);
+            expect(
+                queryClient.getQueryCache().findAll().length
+            ).toBeGreaterThanOrEqual(1);
         });
 
         it("shows loading state when watchlist operation is in progress", async () => {
@@ -618,12 +677,13 @@ describe("MediaDetailsScreen", () => {
     describe("edit watchlist functionality", () => {
         beforeEach(() => {
             useAuthStoreMock.mockImplementation(
-        (selector?: (state: { isAuthenticated: boolean }) => unknown) => {
-                if (typeof selector === "function") {
-                    return selector({ isAuthenticated: true });
+                (selector?: (state: AuthState) => unknown) => {
+                    if (typeof selector === "function") {
+                        return selector({ isAuthenticated: true } as AuthState);
+                    }
+                    return true;
                 }
-                return true;
-            });
+            );
         });
 
         it("opens edit modal when edit button is pressed", async () => {
@@ -665,7 +725,7 @@ describe("MediaDetailsScreen", () => {
 
             // Status appears both in badge and modal, check that at least one exists
             expect(getAllByText("Watching").length).toBeGreaterThan(0);
-            expect(await findByText("8/10")).toBeTruthy();
+            expect(getAllByText("8/10").length).toBeGreaterThan(0);
         });
 
         it("allows changing status in edit modal", async () => {
@@ -694,8 +754,8 @@ describe("MediaDetailsScreen", () => {
             const mediaItem = createMediaItem();
             fetchMediaItemMock.mockResolvedValueOnce(mediaItem);
             fetchWatchlistEntryMock.mockResolvedValueOnce(
-                createWatchEntry({ 
-                    status: "PLANNED", 
+                createWatchEntry({
+                    status: "PLANNED",
                     rating: null,
                     mediaItem: {
                         ...createWatchEntry().mediaItem,
@@ -704,8 +764,8 @@ describe("MediaDetailsScreen", () => {
                 })
             );
             updateWatchlistEntryMock.mockResolvedValueOnce(
-                createWatchEntry({ 
-                    status: "WATCHING", 
+                createWatchEntry({
+                    status: "WATCHING",
                     rating: 5,
                     mediaItem: {
                         ...createWatchEntry().mediaItem,
@@ -714,7 +774,8 @@ describe("MediaDetailsScreen", () => {
                 })
             );
 
-            const { findByText, findByTestId, queryClient } = renderDetailsScreen();
+            const { findByText, findByTestId, queryClient } =
+                renderDetailsScreen();
 
             await waitFor(() => {
                 expect(fetchWatchlistEntryMock).toHaveBeenCalled();
@@ -751,14 +812,17 @@ describe("MediaDetailsScreen", () => {
                 );
             });
 
-            expect(queryClient.getQueryCache().findAll().length).toBeGreaterThanOrEqual(1);
+            expect(
+                queryClient.getQueryCache().findAll().length
+            ).toBeGreaterThanOrEqual(1);
         });
 
         it("closes edit modal when cancel is pressed", async () => {
             fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
             fetchWatchlistEntryMock.mockResolvedValueOnce(createWatchEntry());
 
-            const { findByText, getAllByText, queryByText } = renderDetailsScreen();
+            const { findByText, getAllByText, queryByText } =
+                renderDetailsScreen();
 
             await waitFor(() => {
                 expect(fetchWatchlistEntryMock).toHaveBeenCalled();

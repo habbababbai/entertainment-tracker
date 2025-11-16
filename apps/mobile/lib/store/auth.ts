@@ -13,7 +13,7 @@ const TOKEN_KEYS = {
     refreshToken: "auth-refresh-token",
 } as const;
 
-interface AuthState {
+export interface AuthState {
     user: AuthUser | null;
     accessToken: string | null;
     refreshToken: string | null;

@@ -25,6 +25,7 @@ import { useAuthStore } from "../../lib/store/auth";
 import { useTheme } from "../../lib/theme";
 import { fontSizes, fontWeights } from "../../lib/theme/fonts";
 import EditWatchlistEntryModal from "../../components/EditWatchlistEntryModal";
+import StarRatingComponent from "../../components/StarRating";
 import "../../lib/i18n";
 
 function formatDate(
@@ -55,7 +56,10 @@ function formatCount(
 
 export default function MediaDetailsScreen() {
     const router = useRouter();
-    const params = useLocalSearchParams<{ id?: string | string[] }>();
+    const params = useLocalSearchParams<{
+        id?: string | string[];
+        from?: string | string[];
+    }>();
     const { t } = useTranslation();
     const queryClient = useQueryClient();
     const colors = useTheme();
@@ -156,7 +160,6 @@ export default function MediaDetailsScreen() {
             console.error("Failed to remove from watchlist:", error);
         },
     });
-
 
     const handleSaveToggle = useCallback(() => {
         if (!externalId) {
@@ -266,7 +269,9 @@ export default function MediaDetailsScreen() {
                             {watchEntry && (
                                 <View style={styles.statusBadge}>
                                     <Text style={styles.statusBadgeText}>
-                                        {t(`status.${watchEntry.status}` as keyof typeof t)}
+                                        {t(
+                                            `status.${watchEntry.status}` as keyof typeof t
+                                        )}
                                     </Text>
                                 </View>
                             )}
@@ -356,6 +361,23 @@ export default function MediaDetailsScreen() {
                     <Text style={styles.metaLine}>
                         {t("details.updatedAt", { value: updatedLabel })}
                     </Text>
+                    {watchEntry && watchEntry.rating !== null && (
+                        <View style={styles.section}>
+                            <Text style={styles.sectionHeading}>
+                                {t("details.ratingHeading")}
+                            </Text>
+                            <StarRatingComponent
+                                rating={watchEntry.rating}
+                                onRatingChange={() => {}}
+                                maxStars={10}
+                                size={20}
+                                disabled
+                            />
+                            <Text style={styles.ratingReadOnlyText}>
+                                {watchEntry.rating}/10
+                            </Text>
+                        </View>
+                    )}
                     <View style={styles.section}>
                         <Text style={styles.sectionHeading}>
                             {t("details.descriptionHeading")}
@@ -382,7 +404,20 @@ export default function MediaDetailsScreen() {
             <View style={styles.toolbar}>
                 <TouchableOpacity
                     accessibilityRole="button"
-                    onPress={() => router.back()}
+                    onPress={() => {
+                        const origin = Array.isArray(params.from)
+                            ? params.from[0]
+                            : params.from;
+                        if (origin === "saved") {
+                            router.replace("/(tabs)/saved");
+                            return;
+                        }
+                        if (origin === "home") {
+                            router.replace("/(tabs)/home");
+                            return;
+                        }
+                        router.back();
+                    }}
                     style={styles.backButton}
                 >
                     <Text style={styles.backButtonText}>
@@ -401,176 +436,183 @@ const createStyles = (colors: ReturnType<typeof useTheme>) =>
             flex: 1,
             backgroundColor: colors.background,
         },
-    toolbar: {
-        paddingHorizontal: scale(16),
-        paddingTop: verticalScale(12),
-        paddingBottom: verticalScale(8),
-    },
-    backButton: {
-        alignSelf: "flex-start",
-        paddingHorizontal: scale(12),
-        paddingVertical: verticalScale(6),
-        borderRadius: moderateScale(8),
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.border,
-    },
-    backButtonText: {
-        fontSize: fontSizes.sm,
-        fontWeight: fontWeights.medium,
-        color: colors.textPrimary,
-    },
-    contentContainer: {
-        paddingHorizontal: scale(20),
-        paddingBottom: verticalScale(32),
-        gap: verticalScale(16),
-    },
-    header: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: scale(12),
-    },
-    poster: {
-        width: "100%",
-        height: verticalScale(260),
-        borderRadius: moderateScale(16),
-        backgroundColor: colors.surface,
-    },
-    posterPlaceholder: {
-        height: verticalScale(260),
-        borderRadius: moderateScale(16),
-        backgroundColor: colors.surface,
-        alignItems: "center",
-        justifyContent: "center",
-        borderWidth: 1,
-        borderColor: colors.border,
-        paddingHorizontal: scale(16),
-    },
-    posterPlaceholderText: {
-        color: colors.textSecondary,
-        fontSize: fontSizes.sm,
-        textAlign: "center",
-    },
-    title: {
-        flex: 1,
-        fontSize: fontSizes.xl,
-        fontWeight: fontWeights.semiBold,
-        color: colors.textPrimary,
-    },
-    badgeContainer: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: scale(8),
-    },
-    badge: {
-        backgroundColor: colors.accent,
-        paddingHorizontal: scale(12),
-        paddingVertical: verticalScale(4),
-        borderRadius: moderateScale(999),
-    },
-    badgeText: {
-        color: colors.accentOnAccent,
-        fontSize: fontSizes.xs,
-        fontWeight: fontWeights.semiBold,
-    },
-    statusBadge: {
-        backgroundColor: colors.surface,
-        paddingHorizontal: scale(12),
-        paddingVertical: verticalScale(4),
-        borderRadius: moderateScale(999),
-        borderWidth: 1,
-        borderColor: colors.border,
-    },
-    statusBadgeText: {
-        color: colors.textPrimary,
-        fontSize: fontSizes.xs,
-        fontWeight: fontWeights.semiBold,
-    },
-    actionsContainer: {
-        flexDirection: "row",
-        gap: scale(12),
-        marginBottom: verticalScale(8),
-    },
-    actionButton: {
-        flex: 1,
-        paddingVertical: verticalScale(12),
-        paddingHorizontal: scale(16),
-        borderRadius: moderateScale(10),
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.border,
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    actionButtonActive: {
-        backgroundColor: colors.accent,
-        borderColor: colors.accent,
-    },
-    actionButtonDisabled: {
-        opacity: 0.6,
-    },
-    actionButtonText: {
-        fontSize: fontSizes.sm,
-        fontWeight: fontWeights.semiBold,
-        color: colors.textPrimary,
-    },
-    actionButtonTextActive: {
-        color: colors.accentOnAccent,
-    },
-    ratingButton: {
-        flex: 0,
-        paddingHorizontal: scale(12),
-    },
-    metadata: {
-        fontSize: fontSizes.sm,
-        color: colors.textSecondary,
-    },
-    metaLine: {
-        fontSize: fontSizes.sm,
-        color: colors.textSecondary,
-    },
-    section: {
-        gap: verticalScale(4),
-    },
-    sectionHeading: {
-        fontSize: fontSizes.md,
-        fontWeight: fontWeights.semiBold,
-        color: colors.textPrimary,
-    },
-    sectionBody: {
-        fontSize: fontSizes.md,
-        color: colors.textSecondary,
-        lineHeight: verticalScale(20),
-    },
-    center: {
-        flex: 1,
-        alignItems: "center",
-        justifyContent: "center",
-        padding: scale(24),
-        gap: verticalScale(12),
-    },
-    statusText: {
-        fontSize: fontSizes.sm,
-        color: colors.textSecondary,
-    },
-    errorHeading: {
-        fontSize: fontSizes.lg,
-        fontWeight: fontWeights.semiBold,
-        color: colors.error,
-        textAlign: "center",
-    },
-    errorDetails: {
-        fontSize: fontSizes.sm,
-        color: colors.errorMuted,
-        textAlign: "center",
-    },
-    retryButton: {
-        marginTop: verticalScale(8),
-        paddingHorizontal: scale(16),
-        paddingVertical: verticalScale(8),
-        borderRadius: moderateScale(10),
-        backgroundColor: colors.accent,
-    },
+        toolbar: {
+            paddingHorizontal: scale(16),
+            paddingTop: verticalScale(12),
+            paddingBottom: verticalScale(8),
+        },
+        backButton: {
+            alignSelf: "flex-start",
+            paddingHorizontal: scale(12),
+            paddingVertical: verticalScale(6),
+            borderRadius: moderateScale(8),
+            backgroundColor: colors.surface,
+            borderWidth: 1,
+            borderColor: colors.border,
+        },
+        backButtonText: {
+            fontSize: fontSizes.sm,
+            fontWeight: fontWeights.medium,
+            color: colors.textPrimary,
+        },
+        contentContainer: {
+            paddingHorizontal: scale(20),
+            paddingBottom: verticalScale(32),
+            gap: verticalScale(16),
+        },
+        header: {
+            flexDirection: "row",
+            alignItems: "center",
+            gap: scale(12),
+        },
+        poster: {
+            width: "100%",
+            height: verticalScale(260),
+            borderRadius: moderateScale(16),
+            backgroundColor: colors.surface,
+        },
+        posterPlaceholder: {
+            height: verticalScale(260),
+            borderRadius: moderateScale(16),
+            backgroundColor: colors.surface,
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: colors.border,
+            paddingHorizontal: scale(16),
+        },
+        posterPlaceholderText: {
+            color: colors.textSecondary,
+            fontSize: fontSizes.sm,
+            textAlign: "center",
+        },
+        title: {
+            flex: 1,
+            fontSize: fontSizes.xl,
+            fontWeight: fontWeights.semiBold,
+            color: colors.textPrimary,
+        },
+        badgeContainer: {
+            flexDirection: "row",
+            alignItems: "center",
+            gap: scale(8),
+        },
+        badge: {
+            backgroundColor: colors.accent,
+            paddingHorizontal: scale(12),
+            paddingVertical: verticalScale(4),
+            borderRadius: moderateScale(999),
+        },
+        badgeText: {
+            color: colors.accentOnAccent,
+            fontSize: fontSizes.xs,
+            fontWeight: fontWeights.semiBold,
+        },
+        statusBadge: {
+            backgroundColor: colors.surface,
+            paddingHorizontal: scale(12),
+            paddingVertical: verticalScale(4),
+            borderRadius: moderateScale(999),
+            borderWidth: 1,
+            borderColor: colors.border,
+        },
+        statusBadgeText: {
+            color: colors.textPrimary,
+            fontSize: fontSizes.xs,
+            fontWeight: fontWeights.semiBold,
+        },
+        actionsContainer: {
+            flexDirection: "row",
+            gap: scale(12),
+            marginBottom: verticalScale(8),
+        },
+        actionButton: {
+            flex: 1,
+            paddingVertical: verticalScale(12),
+            paddingHorizontal: scale(16),
+            borderRadius: moderateScale(10),
+            backgroundColor: colors.surface,
+            borderWidth: 1,
+            borderColor: colors.border,
+            alignItems: "center",
+            justifyContent: "center",
+        },
+        actionButtonActive: {
+            backgroundColor: colors.accent,
+            borderColor: colors.accent,
+        },
+        actionButtonDisabled: {
+            opacity: 0.6,
+        },
+        actionButtonText: {
+            fontSize: fontSizes.sm,
+            fontWeight: fontWeights.semiBold,
+            color: colors.textPrimary,
+        },
+        actionButtonTextActive: {
+            color: colors.accentOnAccent,
+        },
+        ratingButton: {
+            flex: 0,
+            paddingHorizontal: scale(12),
+        },
+        metadata: {
+            fontSize: fontSizes.sm,
+            color: colors.textSecondary,
+        },
+        metaLine: {
+            fontSize: fontSizes.sm,
+            color: colors.textSecondary,
+        },
+        section: {
+            gap: verticalScale(4),
+        },
+        sectionHeading: {
+            fontSize: fontSizes.md,
+            fontWeight: fontWeights.semiBold,
+            color: colors.textPrimary,
+            paddingBottom: verticalScale(12),
+        },
+        sectionBody: {
+            fontSize: fontSizes.md,
+            color: colors.textSecondary,
+            lineHeight: verticalScale(20),
+        },
+        ratingReadOnlyText: {
+            marginTop: verticalScale(8),
+            fontSize: fontSizes.md,
+            color: colors.textSecondary,
+            textAlign: "center",
+        },
+        center: {
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            padding: scale(24),
+            gap: verticalScale(12),
+        },
+        statusText: {
+            fontSize: fontSizes.sm,
+            color: colors.textSecondary,
+        },
+        errorHeading: {
+            fontSize: fontSizes.lg,
+            fontWeight: fontWeights.semiBold,
+            color: colors.error,
+            textAlign: "center",
+        },
+        errorDetails: {
+            fontSize: fontSizes.sm,
+            color: colors.errorMuted,
+            textAlign: "center",
+        },
+        retryButton: {
+            marginTop: verticalScale(8),
+            paddingHorizontal: scale(16),
+            paddingVertical: verticalScale(8),
+            borderRadius: moderateScale(10),
+            backgroundColor: colors.accent,
+        },
         retryButtonText: {
             fontSize: fontSizes.sm,
             fontWeight: fontWeights.semiBold,

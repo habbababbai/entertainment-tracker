@@ -274,7 +274,7 @@ function WatchlistCard({ item }: { item: WatchEntry }) {
     const handlePress = useCallback(() => {
         router.push({
             pathname: "/media/[id]",
-            params: { id: item.mediaItem.externalId },
+            params: { id: item.mediaItem.externalId, from: "saved" },
         });
     }, [item.mediaItem.externalId, router]);
 

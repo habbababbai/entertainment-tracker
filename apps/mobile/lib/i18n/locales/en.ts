@@ -27,6 +27,7 @@ export const en = {
         missingId: "Missing media identifier.",
         notFound: "We couldn't find this media item.",
         retry: "Try again",
+        ratingHeading: "Your rating",
         metadata:
             "Source: {{source}} • Type: {{mediaType}} • Seasons: {{seasons}} • Episodes: {{episodes}}",
         releaseDate: "Release date: {{value}}",

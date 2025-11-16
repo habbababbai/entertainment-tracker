@@ -43,7 +43,7 @@ export default function HomeScreen() {
     useEffect(() => {
         const trimmedSearch = search.trim();
         const trimmedSubmitted = submittedSearch.trim();
-        
+
         if (trimmedSearch === trimmedSubmitted) {
             return;
         }
@@ -294,7 +294,7 @@ function MediaCard({ item }: { item: MediaItem }) {
     const handlePress = useCallback(() => {
         router.push({
             pathname: "/media/[id]",
-            params: { id: item.id },
+            params: { id: item.id, from: "home" },
         });
     }, [item.id, router]);
 
