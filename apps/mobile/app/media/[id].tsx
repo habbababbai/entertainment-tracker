@@ -405,6 +405,17 @@ export default function MediaDetailsScreen() {
                 <TouchableOpacity
                     accessibilityRole="button"
                     onPress={() => {
+                        const origin = Array.isArray(params.from)
+                            ? params.from[0]
+                            : params.from;
+                        if (origin === "saved") {
+                            router.replace("/(tabs)/saved");
+                            return;
+                        }
+                        if (origin === "home") {
+                            router.replace("/(tabs)/home");
+                            return;
+                        }
                         router.back();
                     }}
                     style={styles.backButton}
