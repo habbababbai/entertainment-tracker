@@ -11,5 +11,3 @@ export const useTabsStore = create<TabsState>((set) => ({
         set({ lastTab: path });
     },
 }));
-
-
