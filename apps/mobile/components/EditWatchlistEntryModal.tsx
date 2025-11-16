@@ -57,7 +57,11 @@ export default function EditWatchlistEntryModal({
         }) => {
             return updateWatchlistEntry(mediaItemId, updates);
         },
-        onSuccess: () => {
+        onSuccess: (updated) => {
+            queryClient.setQueryData(
+                ["watchlist-entry", updated.mediaItem.externalId],
+                updated
+            );
             void queryClient.invalidateQueries({ queryKey: ["watchlist"] });
             onClose();
         },
