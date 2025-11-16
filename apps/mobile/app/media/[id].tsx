@@ -23,7 +23,6 @@ import {
 } from "../../lib/watchlist";
 import { useAuthStore } from "../../lib/store/auth";
 import { useTheme } from "../../lib/theme";
-import { useTabsStore } from "../../lib/store/tabs";
 import { fontSizes, fontWeights } from "../../lib/theme/fonts";
 import EditWatchlistEntryModal from "../../components/EditWatchlistEntryModal";
 import StarRatingComponent from "../../components/StarRating";
@@ -57,8 +56,10 @@ function formatCount(
 
 export default function MediaDetailsScreen() {
     const router = useRouter();
-    const lastTab = useTabsStore((s) => s.lastTab);
-    const params = useLocalSearchParams<{ id?: string | string[] }>();
+    const params = useLocalSearchParams<{
+        id?: string | string[];
+        from?: string | string[];
+    }>();
     const { t } = useTranslation();
     const queryClient = useQueryClient();
     const colors = useTheme();
@@ -404,23 +405,7 @@ export default function MediaDetailsScreen() {
                 <TouchableOpacity
                     accessibilityRole="button"
                     onPress={() => {
-                        if (
-                            typeof router.canGoBack === "function" &&
-                            router.canGoBack()
-                        ) {
-                            router.back();
-                            return;
-                        }
-                        if (typeof router.replace === "function") {
-                            type ReplaceArg = Parameters<
-                                typeof router.replace
-                            >[0];
-                            const fallback = (lastTab ||
-                                "/saved") as ReplaceArg;
-                            router.replace(fallback);
-                        } else {
-                            router.back();
-                        }
+                        router.back();
                     }}
                     style={styles.backButton}
                 >
