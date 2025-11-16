@@ -162,6 +162,8 @@ const useAuthStoreMock = useAuthStore as jest.MockedFunction<
 >;
 
 const mockBack = jest.fn();
+const mockReplace = jest.fn();
+const mockCanGoBack = jest.fn(() => true);
 
 jest.mock("expo-router", () => {
     const actual = jest.requireActual("expo-router");
@@ -172,6 +174,8 @@ jest.mock("expo-router", () => {
         },
         useRouter: () => ({
             back: mockBack,
+            replace: mockReplace,
+            canGoBack: mockCanGoBack,
         }),
         useLocalSearchParams: jest.fn(() => ({
             id: "tt1234567",
@@ -357,6 +361,50 @@ describe("MediaDetailsScreen", () => {
         const backButton = await findByText("Back");
         fireEvent.press(backButton);
         expect(mockBack).toHaveBeenCalled();
+    });
+
+    it("falls back to replacing with last tab when cannot go back", async () => {
+        // Simulate no back stack
+        mockCanGoBack.mockReturnValue(false);
+        useAuthStoreMock.mockImplementation(
+            (selector?: (state: AuthState) => unknown) => {
+                if (typeof selector === "function") {
+                    return selector({ isAuthenticated: true } as AuthState);
+                }
+                return true;
+            }
+        );
+        fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
+
+        // Remember last tab as /saved
+        const { useTabsStore } =
+            require("../lib/store/tabs") as typeof import("../lib/store/tabs");
+        useTabsStore.getState().setLastTab("/saved");
+
+        const { findByText } = renderDetailsScreen();
+        const backButton = await findByText("Back");
+        fireEvent.press(backButton);
+        expect(mockReplace).toHaveBeenCalledWith("/saved");
+    });
+
+    it("shows the rating section when a rating exists", async () => {
+        useAuthStoreMock.mockImplementation(
+            (selector?: (state: AuthState) => unknown) => {
+                if (typeof selector === "function") {
+                    return selector({ isAuthenticated: true } as AuthState);
+                }
+                return true;
+            }
+        );
+        fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
+        fetchWatchlistEntryMock.mockResolvedValueOnce(
+            createWatchEntry({ rating: 7 })
+        );
+
+        const { findByText } = renderDetailsScreen();
+        expect(await findByText("Your rating")).toBeTruthy();
+        expect(await findByText("7/10")).toBeTruthy();
+        expect(await findByText("Overview")).toBeTruthy();
     });
 
     it("shows a poster fallback when no image is available", async () => {
@@ -678,7 +726,7 @@ describe("MediaDetailsScreen", () => {
 
             // Status appears both in badge and modal, check that at least one exists
             expect(getAllByText("Watching").length).toBeGreaterThan(0);
-            expect(await findByText("8/10")).toBeTruthy();
+            expect(getAllByText("8/10").length).toBeGreaterThan(0);
         });
 
         it("allows changing status in edit modal", async () => {
