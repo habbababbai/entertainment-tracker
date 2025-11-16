@@ -363,8 +363,7 @@ describe("MediaDetailsScreen", () => {
         expect(mockBack).toHaveBeenCalled();
     });
 
-    it("falls back to replacing with last tab when cannot go back", async () => {
-        // Simulate no back stack
+    it("replaces to the originating saved tab when cannot go back", async () => {
         mockCanGoBack.mockReturnValue(false);
         useAuthStoreMock.mockImplementation(
             (selector?: (state: AuthState) => unknown) => {
@@ -375,16 +374,16 @@ describe("MediaDetailsScreen", () => {
             }
         );
         fetchMediaItemMock.mockResolvedValueOnce(createMediaItem());
-
-        // Remember last tab as /saved
-        const { useTabsStore } =
-            require("../lib/store/tabs") as typeof import("../lib/store/tabs");
-        useTabsStore.getState().setLastTab("/saved");
+        // Provide origin param via route
+        mockUseLocalSearchParams.mockImplementation(() => ({
+            id: "tt1234567",
+            from: "saved",
+        }));
 
         const { findByText } = renderDetailsScreen();
         const backButton = await findByText("Back");
         fireEvent.press(backButton);
-        expect(mockReplace).toHaveBeenCalledWith("/saved");
+        expect(mockReplace).toHaveBeenCalledWith("/(tabs)/saved");
     });
 
     it("shows the rating section when a rating exists", async () => {
